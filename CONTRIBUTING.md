@@ -22,7 +22,7 @@ Thank you for your interest in contributing to our documentation! This guide wil
 6. Preview your changes at `http://localhost:3000`
 7. Commit your changes and submit a pull request
 
-For more details on local development, see our [development guide](development.mdx).
+For more details on contributing to OpenJDK itself, see the [OpenJDK Contributing Guide](https://github.com/openjdk/jdk/blob/master/CONTRIBUTING.md).
 
 ## Writing guidelines
 
