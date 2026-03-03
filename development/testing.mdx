@@ -1,0 +1,602 @@
+---
+title: Testing Guide
+description: Comprehensive guide to running tests, test frameworks, and testing best practices for OpenJDK development
+---
+
+## Overview
+
+Testing is a critical part of OpenJDK development. The JDK includes multiple test frameworks and thousands of tests to ensure quality and prevent regressions. This guide covers how to run tests, interpret results, and write new tests.
+
+## Quick Start
+
+The easiest way to run tests is using the `make test` framework:
+
+```bash
+# Run tier1 tests (recommended minimum for all changes)
+make test-tier1
+
+# Run all tests (takes hours)
+make test
+
+# Run specific test group
+make test TEST=jdk_lang
+```
+
+<Note>
+All contributors should run at least **tier1** tests before submitting changes. These tests cover core functionality and run in 15-30 minutes on typical hardware.
+</Note>
+
+## Test Frameworks
+
+OpenJDK uses several test frameworks:
+
+### JTReg (Java Regression Tests)
+
+JTReg is the primary test framework for the JDK:
+
+<CodeGroup>
+```bash Run All JTReg Tests
+# Run all JTReg tests in a directory
+make test TEST=jtreg:test/jdk/java/lang
+```
+
+```bash Run Specific Test
+# Run a single test file
+make test TEST=test/jdk/java/lang/String/StringTest.java
+```
+
+```bash Run Test Group
+# Run a predefined test group
+make test TEST=jdk_util
+make test TEST=hotspot_gc
+```
+</CodeGroup>
+
+#### JTReg Configuration
+
+Customize JTReg behavior with control variables:
+
+```bash
+# Set concurrency level
+make test TEST=tier1 JTREG="JOBS=8"
+
+# Increase timeout factor for slow machines
+make test TEST=tier1 JTREG="TIMEOUT_FACTOR=8"
+
+# Run in verbose mode
+make test TEST=tier1 JTREG="VERBOSE=all"
+
+# Pass Java options to tests
+make test TEST=tier1 JTREG="JAVA_OPTIONS=-Xmx2g -Xlog:gc"
+```
+
+<Accordion title="Common JTReg Options">
+  - `JOBS=<n>` - Test concurrency level (default: number of CPUs)
+  - `TIMEOUT_FACTOR=<n>` - Multiply timeouts by factor (default: 4)
+  - `JAVA_OPTIONS=<options>` - Java options for test classes
+  - `VM_OPTIONS=<options>` - Options for compiling and running classes
+  - `VERBOSE=<level>` - Verbosity: fail,error,summary,all
+  - `RETAIN=<level>` - Retain test data: none,fail,error,all
+</Accordion>
+
+### GTest (Native Unit Tests)
+
+GTest tests native HotSpot code:
+
+```bash
+# Run all GTest tests
+make test TEST=gtest
+
+# Run specific test
+make test TEST=gtest:LogDecorations
+
+# Run test repeatedly (useful for debugging intermittent failures)
+make test TEST=gtest:LogDecorations GTEST="REPEAT=-1"
+
+# Run with specific JVM variant
+make test TEST=gtest:all/server
+```
+
+<Note>
+GTest requires configuring the build with gtest support. See the [Building Guide](/building/configuration) for details.
+</Note>
+
+### Microbenchmarks (JMH)
+
+Performance microbenchmarks using JMH:
+
+```bash
+# Run microbenchmarks matching a pattern
+make test TEST=micro:java.lang.String
+
+# Run with specific parameters
+make test TEST=micro:StringConcat MICRO="FORK=1;WARMUP_ITER=5;ITER=10"
+
+# Run reflection benchmarks
+make test TEST=micro:java.lang.reflect
+```
+
+<Accordion title="Microbenchmark Options">
+  - `FORK=<n>` - Number of benchmark forks
+  - `ITER=<n>` - Measurement iterations per fork
+  - `WARMUP_ITER=<n>` - Warmup iterations before measurement
+  - `TIME=<seconds>` - Time per measurement iteration
+  - `RESULTS_FORMAT=<format>` - Output format: text, csv, json
+</Accordion>
+
+## Test Tiers
+
+OpenJDK uses tiered testing to balance coverage and execution time:
+
+<Steps>
+  <Step title="Tier 1 - Core Tests">
+    **Run time**: 15-30 minutes
+    
+    Essential tests covering core functionality:
+    - HotSpot VM fundamentals
+    - Core APIs in `java.base`
+    - `javac` compiler basics
+    
+    ```bash
+    make test-tier1
+    ```
+    
+    <Note>
+    **Required** for all changes. Tier1 tests run in GitHub Actions on pull requests.
+    </Note>
+  </Step>
+
+  <Step title="Tier 2 - Extended Tests">
+    **Run time**: 1-2 hours
+    
+    Broader coverage including:
+    - Longer-running core tests
+    - Additional JDK modules (XML, security, etc.)
+    - Less stable or platform-specific tests
+    
+    ```bash
+    make test-tier2
+    ```
+    
+    <Note>
+    **Recommended** for significant changes to core components.
+    </Note>
+  </Step>
+
+  <Step title="Tier 3 - Stress Tests">
+    **Run time**: 3-6 hours
+    
+    More comprehensive testing:
+    - Stress tests and corner cases
+    - GUI tests (require display)
+    - Higher concurrency tests
+    
+    ```bash
+    # Run with low concurrency for GUI tests
+    make test-tier3 TEST_JOBS=1
+    
+    # Or exclude headful tests
+    make test-tier3 JTREG="KEYWORDS=!headful"
+    ```
+  </Step>
+
+  <Step title="Tier 4 - Full Suite">
+    **Run time**: Many hours
+    
+    Complete test coverage:
+    - All remaining tests
+    - Long-running suites (vmTestbase)
+    - Comprehensive platform testing
+    
+    ```bash
+    make test-tier4
+    ```
+  </Step>
+</Steps>
+
+## Running Specific Tests
+
+### By Component
+
+```bash
+# Java language tests
+make test TEST=jdk_lang
+
+# Utilities tests
+make test TEST=jdk_util
+
+# Garbage collection tests
+make test TEST=hotspot_gc
+
+# Security tests
+make test TEST=jdk_security
+
+# Networking tests
+make test TEST=jdk_net
+```
+
+### By Path
+
+```bash
+# Test a specific directory
+make test TEST=test/jdk/java/util/concurrent
+
+# Test a single file
+make test TEST=test/jdk/java/lang/String/StringTest.java
+
+# Multiple tests
+make test TEST="test/jdk/java/lang/String/StringTest.java test/jdk/java/lang/Integer/IntegerTest.java"
+```
+
+### Advanced Selection
+
+<CodeGroup>
+```bash JTReg Selection
+# Run tests with specific tags
+make test TEST=jtreg:test/hotspot:hotspot_gc
+
+# Multiple test roots
+make test TEST="jtreg:test/jdk:tier1 jtreg:test/hotspot:tier1"
+```
+
+```bash Regex Patterns
+# Microbenchmarks with pattern
+make test TEST="micro:ArrayCopy\\\\|reflect"
+```
+
+```bash Combined Tests
+# Mix different frameworks
+make test TEST="tier1 gtest:Log"
+```
+</CodeGroup>
+
+## Test Results
+
+### Understanding Output
+
+Test results are summarized at the end:
+
+```
+==============================
+Test summary
+==============================
+   TEST                                          TOTAL  PASS  FAIL ERROR
+>> jtreg:jdk/test:tier1                           1867  1865     2     0 <<
+   jtreg:langtools/test:tier1                     4711  4711     0     0
+   jtreg:hotspot/test:tier1                       2156  2156     0     0
+==============================
+TEST FAILURE
+```
+
+<Warning>
+Tests with failures (FAIL ≠ 0 or ERROR ≠ 0) are marked with `>> ... <<` for easy identification.
+</Warning>
+
+### Result Locations
+
+Test results are stored in the build directory:
+
+```bash
+# Main results directory
+build/<config>/test-results/
+
+# Individual test results
+build/<config>/test-results/<test-id>/
+
+# Example: JTReg tier1 results
+build/linux-x64/test-results/jtreg_test_jdk_tier1/
+
+# Work files and logs
+build/<config>/test-support/<test-id>/
+```
+
+### Analyzing Failures
+
+<Steps>
+  <Step title="Check Test Output">
+    ```bash
+    # View the test report
+    cat build/<config>/test-results/<test-id>/text/stats.txt
+    
+    # Check failed test logs
+    less build/<config>/test-results/<test-id>/text/newfail.txt
+    ```
+  </Step>
+
+  <Step title="Examine Work Directory">
+    ```bash
+    # JTReg work directory contains detailed logs
+    cd build/<config>/test-support/<test-id>/work
+    
+    # Each test has a .jtr file with details
+    less <TestName>.jtr
+    ```
+  </Step>
+
+  <Step title="Rerun Failed Tests">
+    ```bash
+    # Use test-only to skip rebuild
+    make test-only TEST=<path-to-specific-test>
+    
+    # Add debugging options
+    make test TEST=<test> JTREG="JAVA_OPTIONS=-Xlog:all=debug"
+    ```
+  </Step>
+</Steps>
+
+## Writing Tests
+
+### JTReg Test Structure
+
+```java
+/*
+ * @test
+ * @bug 8123456
+ * @summary Test String.hashCode() handles null values
+ * @library /test/lib
+ * @run main StringHashCodeNullTest
+ */
+
+import jdk.test.lib.Asserts;
+
+public class StringHashCodeNullTest {
+    public static void main(String[] args) {
+        // Test implementation
+        String str = "test";
+        int hash = str.hashCode();
+        Asserts.assertNotEquals(hash, 0, "Hash should not be zero");
+        
+        // More test cases
+        testEdgeCases();
+    }
+    
+    private static void testEdgeCases() {
+        // Edge case testing
+    }
+}
+```
+
+<Accordion title="JTReg Test Tags">
+  - `@test` - Marks the file as a test
+  - `@bug <number>` - Associated bug number(s)
+  - `@summary` - Brief description of what the test covers
+  - `@library` - Additional libraries to include
+  - `@run` - How to execute the test
+  - `@requires` - Platform or feature requirements
+  - `@modules` - Required Java modules
+</Accordion>
+
+### GTest Test Structure
+
+```cpp
+#include "unittest.hpp"
+#include "memory/allocation.hpp"
+
+TEST(AllocationTests, basic_allocation) {
+  char* data = NEW_C_HEAP_ARRAY(char, 100, mtTest);
+  ASSERT_NE(data, nullptr);
+  
+  // Use the allocation
+  data[0] = 'A';
+  ASSERT_EQ(data[0], 'A');
+  
+  FREE_C_HEAP_ARRAY(char, data);
+}
+
+TEST(AllocationTests, overflow_handling) {
+  // Test overflow scenarios
+  size_t huge_size = SIZE_MAX;
+  // Test appropriate handling
+}
+```
+
+### Test Best Practices
+
+<Steps>
+  <Step title="Make Tests Reproducible">
+    - Avoid dependencies on timing
+    - Don't rely on external state
+    - Use fixed random seeds when needed
+    - Clean up resources properly
+  </Step>
+
+  <Step title="Keep Tests Fast">
+    - Tier1 tests should complete in seconds
+    - Avoid unnecessary iterations
+    - Use timeouts appropriately
+    - Consider test tier placement
+  </Step>
+
+  <Step title="Test One Thing">
+    - Focus each test on a specific behavior
+    - Use multiple small tests over one large test
+    - Name tests descriptively
+  </Step>
+
+  <Step title="Handle Failures Clearly">
+    ```java
+    // Good: Clear failure message
+    Asserts.assertEquals(result, expected, 
+        "Hash code calculation failed for input: " + input);
+    
+    // Bad: No context
+    Asserts.assertEquals(result, expected);
+    ```
+  </Step>
+</Steps>
+
+## Special Test Scenarios
+
+### Docker Tests
+
+```bash
+# Docker tests may need specific image configuration
+make test TEST="jtreg:test/hotspot/jtreg/containers/docker" \
+  JTREG="JAVA_OPTIONS=-Djdk.test.docker.image.name=ubuntu \
+  -Djdk.test.docker.image.version=latest"
+```
+
+### PKCS11 Tests
+
+```bash
+# May require alternative NSS library location
+make test TEST="jtreg:sun/security/pkcs11" \
+  JTREG="JAVA_OPTIONS=-Djdk.test.lib.artifacts.nsslib-linux_aarch64=/path/to/NSS-libs"
+```
+
+### Locale-Specific Tests
+
+```bash
+# Set US locale for consistent test behavior
+export LANG="en_US"
+make test TEST=tier1
+
+# Or use JVM options
+make test JTREG="VM_OPTIONS=-Duser.language=en -Duser.country=US" TEST=tier1
+```
+
+### Stress Testing
+
+```bash
+# Repeat tests to find intermittent failures
+make test TEST=<test> JTREG="REPEAT_COUNT=100"
+
+# For GTest
+make test TEST=gtest:<test> GTEST="REPEAT=-1"
+
+# Run until first failure
+make test TEST=<test> JTREG="RETRY_COUNT=0"
+```
+
+## Problem Lists
+
+Tests with known issues are tracked in problem lists:
+
+```bash
+# Each test root has a ProblemList.txt
+test/jdk/ProblemList.txt
+test/hotspot/jtreg/ProblemList.txt
+
+# Use additional problem lists
+make test TEST=tier1 JTREG="EXTRA_PROBLEM_LISTS=/path/to/MyProblemList.txt"
+
+# Run only problem-listed tests
+make test TEST=tier1 JTREG="RUN_PROBLEM_LISTS=true"
+```
+
+## Debugging Test Failures
+
+### Enable Verbose Output
+
+```bash
+# Maximum verbosity
+make test TEST=<test> JTREG="VERBOSE=all"
+
+# Retain all test data
+make test TEST=<test> JTREG="RETAIN=all"
+
+# Add Java logging
+make test TEST=<test> JTREG="JAVA_OPTIONS=-Xlog:all=debug:file=/tmp/test.log"
+```
+
+### Attach Debugger
+
+```bash
+# Run test with debugger options
+make test TEST=<test> JTREG="JAVA_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005"
+
+# Then attach your debugger to port 5005
+```
+
+### Run Test Directly
+
+```bash
+# Sometimes easier to run JTReg directly
+cd test/jdk
+/path/to/jtreg/bin/jtreg -jdk:/path/to/jdk java/lang/String/StringTest.java
+```
+
+## Continuous Integration
+
+### GitHub Actions
+
+Pull requests automatically run tier1 tests:
+
+- Linux x64 and aarch64
+- macOS x64 and aarch64
+- Windows x64
+
+<Note>
+Ensure tier1 tests pass before requesting review. Failed CI tests will delay integration.
+</Note>
+
+### Pre-Integration Testing
+
+```bash
+# Run what CI will run
+make test-tier1
+
+# For broader coverage
+make test-tier2
+
+# Platform-specific testing
+make test TEST=tier1 CONF=macosx-x64
+```
+
+## Performance Testing
+
+### Microbenchmarks
+
+```bash
+# Run benchmarks with proper warmup
+make test TEST=micro:java.lang.String \
+  MICRO="FORK=3;WARMUP_ITER=10;ITER=10"
+
+# Save results for comparison
+make test TEST=micro:java.lang.String \
+  MICRO="RESULTS_FORMAT=json"
+
+# Results saved to:
+cat build/<config>/test-results/micro_*/results.json
+```
+
+### Comparing Performance
+
+```bash
+# Baseline run
+make test TEST=micro:StringConcat MICRO="RESULTS_FORMAT=json"
+cp build/results.json baseline.json
+
+# After changes
+make test TEST=micro:StringConcat MICRO="RESULTS_FORMAT=json"
+# Compare baseline.json with new results.json
+```
+
+## Resources
+
+### Documentation
+
+- [Testing Documentation](https://github.com/openjdk/jdk/blob/master/doc/testing.md) - Complete testing guide
+- [JTReg Documentation](https://openjdk.org/jtreg/) - JTReg framework details
+- [JTReg FAQ](https://openjdk.org/jtreg/faq.html) - Common questions
+
+### Getting Help
+
+<Accordion title="Test Framework Issues">
+  Contact test-dev@openjdk.org for questions about:
+  - Test infrastructure
+  - Framework usage
+  - Problem list management
+</Accordion>
+
+<Accordion title="Test Failures">
+  For test failure analysis:
+  - Check test output and logs
+  - Search for similar issues in JBS
+  - Ask on component-specific mailing lists
+  - File a bug if needed
+</Accordion>
+
+<Note>
+Regular testing is essential for maintaining JDK quality. Make testing part of your development workflow, not an afterthought.
+</Note>

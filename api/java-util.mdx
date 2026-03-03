@@ -1,0 +1,619 @@
+---
+title: "java.util Package"
+description: "Collections framework, Stream API, date/time facilities, and utility classes"
+---
+
+## Overview
+
+The `java.util` package contains the collections framework, legacy collection classes, event model, date and time facilities, internationalization, and miscellaneous utility classes.
+
+## Collections Framework
+
+The Java Collections Framework provides a unified architecture for representing and manipulating collections.
+
+### Core Interfaces
+
+```java
+Collection<E>
+├── List<E> (ordered, allows duplicates)
+│   ├── ArrayList<E>
+│   ├── LinkedList<E>
+│   └── Vector<E>
+├── Set<E> (no duplicates)
+│   ├── HashSet<E>
+│   ├── LinkedHashSet<E>
+│   └── TreeSet<E>
+└── Queue<E> (FIFO operations)
+    ├── PriorityQueue<E>
+    └── LinkedList<E>
+
+Map<K,V> (key-value pairs)
+├── HashMap<K,V>
+├── LinkedHashMap<K,V>
+├── TreeMap<K,V>
+└── Hashtable<K,V>
+```
+
+### List Interface
+
+An ordered collection where users have precise control over where elements are inserted.
+
+<Accordion title="List Interface Methods">
+  <ResponseField name="add(E element)" type="boolean">
+    Appends the element to the end of the list.
+    
+    ```java
+    List<String> list = new ArrayList<>();
+    list.add("apple");
+    list.add("banana");
+    ```
+  </ResponseField>
+  
+  <ResponseField name="add(int index, E element)" type="void">
+    Inserts the element at the specified position.
+    
+    ```java
+    list.add(1, "orange"); // Insert at index 1
+    ```
+  </ResponseField>
+  
+  <ResponseField name="get(int index)" type="E">
+    Returns the element at the specified position.
+    
+    ```java
+    String fruit = list.get(0); // "apple"
+    ```
+  </ResponseField>
+  
+  <ResponseField name="set(int index, E element)" type="E">
+    Replaces the element at the specified position.
+  </ResponseField>
+  
+  <ResponseField name="remove(int index)" type="E">
+    Removes and returns the element at the specified position.
+  </ResponseField>
+  
+  <ResponseField name="indexOf(Object o)" type="int">
+    Returns the index of the first occurrence of the element, or -1 if not found.
+  </ResponseField>
+  
+  <ResponseField name="size()" type="int">
+    Returns the number of elements in the list.
+  </ResponseField>
+  
+  <ResponseField name="isEmpty()" type="boolean">
+    Returns true if the list contains no elements.
+  </ResponseField>
+  
+  <ResponseField name="contains(Object o)" type="boolean">
+    Returns true if the list contains the specified element.
+  </ResponseField>
+  
+  <ResponseField name="clear()" type="void">
+    Removes all elements from the list.
+  </ResponseField>
+</Accordion>
+
+### ArrayList
+
+Resizable-array implementation of the List interface.
+
+```java
+public class ArrayList<E> extends AbstractList<E>
+        implements List<E>, RandomAccess, Cloneable, Serializable
+```
+
+<Accordion title="ArrayList Details">
+  ArrayList provides:
+  - **Dynamic resizing** - Grows automatically as elements are added
+  - **Fast random access** - O(1) time for get() and set()
+  - **Amortized constant time** - O(1) amortized for add()
+  - **Not thread-safe** - Use Collections.synchronizedList() for thread safety
+  
+  ```java
+  // Creating ArrayLists
+  List<String> list1 = new ArrayList<>();
+  List<String> list2 = new ArrayList<>(100); // Initial capacity
+  List<String> list3 = new ArrayList<>(existingCollection);
+  
+  // Adding elements
+  list1.add("first");
+  list1.add("second");
+  list1.add(0, "new first"); // Insert at position
+  
+  // Accessing elements
+  String element = list1.get(1);
+  list1.set(1, "modified");
+  
+  // Removing elements
+  list1.remove(0);              // Remove by index
+  list1.remove("second");       // Remove by value
+  
+  // Iteration
+  for (String item : list1) {
+      System.out.println(item);
+  }
+  
+  // Capacity management
+  list1.ensureCapacity(1000);   // Pre-allocate capacity
+  list1.trimToSize();           // Reduce capacity to size
+  ```
+  
+  <Note>
+    ArrayList is generally preferred over Vector due to better performance (no synchronization overhead).
+  </Note>
+</Accordion>
+
+### HashMap
+
+Hash table based implementation of the Map interface.
+
+```java
+public class HashMap<K,V> extends AbstractMap<K,V>
+    implements Map<K,V>, Cloneable, Serializable
+```
+
+<Accordion title="HashMap Details">
+  HashMap provides:
+  - **Constant-time performance** - O(1) for get() and put() (on average)
+  - **Permits null** - Allows null keys and null values
+  - **No order guarantee** - Does not maintain insertion order
+  - **Not thread-safe** - Use ConcurrentHashMap for concurrent access
+  
+  ```java
+  // Creating HashMaps
+  Map<String, Integer> map = new HashMap<>();
+  Map<String, Integer> map2 = new HashMap<>(100); // Initial capacity
+  Map<String, Integer> map3 = new HashMap<>(existingMap);
+  
+  // Adding/updating entries
+  map.put("apple", 5);
+  map.put("banana", 3);
+  map.put("apple", 7);          // Overwrites previous value
+  
+  // Conditional put
+  map.putIfAbsent("cherry", 2); // Only if key doesn't exist
+  
+  // Retrieving values
+  Integer count = map.get("apple");           // 7
+  Integer defaultVal = map.getOrDefault("pear", 0); // 0
+  
+  // Checking existence
+  boolean hasApple = map.containsKey("apple");   // true
+  boolean hasValue5 = map.containsValue(5);      // false
+  
+  // Removing entries
+  map.remove("banana");
+  map.remove("apple", 7);       // Remove only if value matches
+  
+  // Iteration
+  for (Map.Entry<String, Integer> entry : map.entrySet()) {
+      System.out.println(entry.getKey() + ": " + entry.getValue());
+  }
+  
+  // Keys and values
+  Set<String> keys = map.keySet();
+  Collection<Integer> values = map.values();
+  
+  // Advanced operations
+  map.compute("apple", (k, v) -> v == null ? 1 : v + 1);
+  map.merge("banana", 1, Integer::sum);
+  ```
+  
+  **Performance Tips:**
+  - Initial capacity should be set based on expected size
+  - Load factor (default 0.75) balances time vs space
+  - Use LinkedHashMap to maintain insertion order
+  - Use TreeMap for sorted keys
+</Accordion>
+
+### Map Interface
+
+<Accordion title="Map Interface Methods">
+  <ResponseField name="put(K key, V value)" type="V">
+    Associates the specified value with the specified key.
+  </ResponseField>
+  
+  <ResponseField name="get(Object key)" type="V">
+    Returns the value to which the specified key is mapped.
+  </ResponseField>
+  
+  <ResponseField name="remove(Object key)" type="V">
+    Removes the mapping for the specified key.
+  </ResponseField>
+  
+  <ResponseField name="containsKey(Object key)" type="boolean">
+    Returns true if this map contains a mapping for the specified key.
+  </ResponseField>
+  
+  <ResponseField name="containsValue(Object value)" type="boolean">
+    Returns true if this map maps one or more keys to the specified value.
+  </ResponseField>
+  
+  <ResponseField name="keySet()" type="Set<K>">
+    Returns a Set view of the keys contained in this map.
+  </ResponseField>
+  
+  <ResponseField name="values()" type="Collection<V>">
+    Returns a Collection view of the values contained in this map.
+  </ResponseField>
+  
+  <ResponseField name="entrySet()" type="Set<Map.Entry<K,V>>">
+    Returns a Set view of the mappings contained in this map.
+  </ResponseField>
+</Accordion>
+
+## Stream API
+
+The Stream API provides functional-style operations on sequences of elements.
+
+### Stream Interface
+
+```java
+public interface Stream<T> extends BaseStream<T, Stream<T>>
+```
+
+<Accordion title="Stream Creation">
+  ```java
+  // From collections
+  List<String> list = Arrays.asList("a", "b", "c");
+  Stream<String> stream1 = list.stream();
+  Stream<String> parallelStream = list.parallelStream();
+  
+  // From arrays
+  String[] array = {"x", "y", "z"};
+  Stream<String> stream2 = Arrays.stream(array);
+  
+  // From values
+  Stream<String> stream3 = Stream.of("one", "two", "three");
+  
+  // From builder
+  Stream<String> stream4 = Stream.<String>builder()
+      .add("a")
+      .add("b")
+      .build();
+  
+  // Generate infinite streams
+  Stream<Double> randoms = Stream.generate(Math::random);
+  Stream<Integer> numbers = Stream.iterate(0, n -> n + 1);
+  
+  // From ranges
+  IntStream range = IntStream.range(1, 11);  // 1 to 10
+  ```
+</Accordion>
+
+<Accordion title="Intermediate Operations">
+  These operations return a new stream and are lazy (not executed until a terminal operation is invoked).
+  
+  <ResponseField name="filter(Predicate<T> predicate)" type="Stream<T>">
+    Returns a stream with elements matching the predicate.
+    
+    ```java
+    List<Integer> numbers = Arrays.asList(1, 2, 3, 4, 5, 6);
+    List<Integer> evens = numbers.stream()
+        .filter(n -> n % 2 == 0)
+        .collect(Collectors.toList()); // [2, 4, 6]
+    ```
+  </ResponseField>
+  
+  <ResponseField name="map(Function<T,R> mapper)" type="Stream<R>">
+    Transforms each element using the provided function.
+    
+    ```java
+    List<String> names = Arrays.asList("alice", "bob", "charlie");
+    List<String> upper = names.stream()
+        .map(String::toUpperCase)
+        .collect(Collectors.toList());
+    ```
+  </ResponseField>
+  
+  <ResponseField name="flatMap(Function<T,Stream<R>> mapper)" type="Stream<R>">
+    Flattens nested streams into a single stream.
+    
+    ```java
+    List<List<Integer>> nested = Arrays.asList(
+        Arrays.asList(1, 2),
+        Arrays.asList(3, 4)
+    );
+    List<Integer> flat = nested.stream()
+        .flatMap(List::stream)
+        .collect(Collectors.toList()); // [1, 2, 3, 4]
+    ```
+  </ResponseField>
+  
+  <ResponseField name="distinct()" type="Stream<T>">
+    Returns a stream with distinct elements.
+  </ResponseField>
+  
+  <ResponseField name="sorted()" type="Stream<T>">
+    Returns a sorted stream.
+  </ResponseField>
+  
+  <ResponseField name="limit(long maxSize)" type="Stream<T>">
+    Returns a stream truncated to the specified size.
+  </ResponseField>
+  
+  <ResponseField name="skip(long n)" type="Stream<T>">
+    Returns a stream with the first n elements skipped.
+  </ResponseField>
+</Accordion>
+
+<Accordion title="Terminal Operations">
+  These operations trigger the execution of the stream pipeline and produce a result.
+  
+  <ResponseField name="forEach(Consumer<T> action)" type="void">
+    Performs an action for each element.
+    
+    ```java
+    list.stream().forEach(System.out::println);
+    ```
+  </ResponseField>
+  
+  <ResponseField name="collect(Collector<T,A,R> collector)" type="R">
+    Accumulates elements into a collection or other result.
+    
+    ```java
+    List<String> list = stream.collect(Collectors.toList());
+    Set<String> set = stream.collect(Collectors.toSet());
+    String joined = stream.collect(Collectors.joining(", "));
+    ```
+  </ResponseField>
+  
+  <ResponseField name="reduce(BinaryOperator<T> accumulator)" type="Optional<T>">
+    Combines elements using an associative accumulation function.
+    
+    ```java
+    Optional<Integer> sum = numbers.stream()
+        .reduce((a, b) -> a + b);
+    
+    int total = numbers.stream()
+        .reduce(0, Integer::sum);
+    ```
+  </ResponseField>
+  
+  <ResponseField name="count()" type="long">
+    Returns the count of elements in the stream.
+  </ResponseField>
+  
+  <ResponseField name="anyMatch(Predicate<T> predicate)" type="boolean">
+    Returns true if any element matches the predicate.
+  </ResponseField>
+  
+  <ResponseField name="allMatch(Predicate<T> predicate)" type="boolean">
+    Returns true if all elements match the predicate.
+  </ResponseField>
+  
+  <ResponseField name="noneMatch(Predicate<T> predicate)" type="boolean">
+    Returns true if no elements match the predicate.
+  </ResponseField>
+  
+  <ResponseField name="findFirst()" type="Optional<T>">
+    Returns an Optional describing the first element.
+  </ResponseField>
+  
+  <ResponseField name="findAny()" type="Optional<T>">
+    Returns an Optional describing some element.
+  </ResponseField>
+</Accordion>
+
+### Stream Examples
+
+```java
+public class StreamExamples {
+    public static void main(String[] args) {
+        List<Person> people = Arrays.asList(
+            new Person("Alice", 30),
+            new Person("Bob", 25),
+            new Person("Charlie", 35),
+            new Person("Diana", 28)
+        );
+        
+        // Filter and map
+        List<String> namesOver30 = people.stream()
+            .filter(p -> p.getAge() > 30)
+            .map(Person::getName)
+            .collect(Collectors.toList());
+        
+        // Average age
+        double avgAge = people.stream()
+            .mapToInt(Person::getAge)
+            .average()
+            .orElse(0.0);
+        
+        // Grouping
+        Map<Integer, List<Person>> byAge = people.stream()
+            .collect(Collectors.groupingBy(Person::getAge));
+        
+        // Partitioning
+        Map<Boolean, List<Person>> over30 = people.stream()
+            .collect(Collectors.partitioningBy(p -> p.getAge() > 30));
+        
+        // Finding max/min
+        Optional<Person> oldest = people.stream()
+            .max(Comparator.comparing(Person::getAge));
+        
+        // Parallel processing
+        long count = people.parallelStream()
+            .filter(p -> p.getAge() > 25)
+            .count();
+    }
+}
+```
+
+## Utility Classes
+
+### Collections Class
+
+Provides static methods to operate on collections.
+
+<Accordion title="Collections Utility Methods">
+  ```java
+  List<Integer> list = new ArrayList<>(Arrays.asList(3, 1, 4, 1, 5));
+  
+  // Sorting
+  Collections.sort(list);                    // [1, 1, 3, 4, 5]
+  Collections.sort(list, Collections.reverseOrder());
+  
+  // Searching
+  int index = Collections.binarySearch(list, 3);
+  
+  // Shuffling
+  Collections.shuffle(list);
+  
+  // Min/Max
+  int min = Collections.min(list);
+  int max = Collections.max(list);
+  
+  // Frequency
+  int count = Collections.frequency(list, 1); // Count of 1s
+  
+  // Reverse
+  Collections.reverse(list);
+  
+  // Fill
+  Collections.fill(list, 0);                 // Fill with zeros
+  
+  // Synchronized wrappers
+  List<Integer> syncList = Collections.synchronizedList(list);
+  Map<String, Integer> syncMap = Collections.synchronizedMap(new HashMap<>());
+  
+  // Unmodifiable wrappers
+  List<Integer> unmodifiable = Collections.unmodifiableList(list);
+  
+  // Empty collections
+  List<String> empty = Collections.emptyList();
+  Set<String> emptySet = Collections.emptySet();
+  Map<String, Integer> emptyMap = Collections.emptyMap();
+  
+  // Singleton
+  Set<String> singleton = Collections.singleton("only");
+  ```
+</Accordion>
+
+### Arrays Class
+
+Provides static methods to operate on arrays.
+
+<Accordion title="Arrays Utility Methods">
+  ```java
+  int[] numbers = {5, 2, 8, 1, 9};
+  
+  // Sorting
+  Arrays.sort(numbers);              // [1, 2, 5, 8, 9]
+  
+  // Binary search (array must be sorted)
+  int index = Arrays.binarySearch(numbers, 5);
+  
+  // Fill
+  Arrays.fill(numbers, 0);           // All elements = 0
+  
+  // Copy
+  int[] copy = Arrays.copyOf(numbers, numbers.length);
+  int[] partial = Arrays.copyOfRange(numbers, 0, 3);
+  
+  // Equals
+  boolean same = Arrays.equals(numbers, copy);
+  
+  // Convert to List
+  List<Integer> list = Arrays.asList(1, 2, 3, 4, 5);
+  
+  // Convert to String
+  String str = Arrays.toString(numbers);
+  
+  // Stream
+  int sum = Arrays.stream(numbers).sum();
+  ```
+</Accordion>
+
+### Optional Class
+
+A container object which may or may not contain a non-null value.
+
+<Accordion title="Optional Usage">
+  ```java
+  // Creating Optionals
+  Optional<String> present = Optional.of("value");
+  Optional<String> empty = Optional.empty();
+  Optional<String> nullable = Optional.ofNullable(possiblyNull);
+  
+  // Checking presence
+  if (present.isPresent()) {
+      String value = present.get();
+  }
+  
+  // Alternative: ifPresent
+  present.ifPresent(value -> System.out.println(value));
+  
+  // Default values
+  String value = empty.orElse("default");
+  String value2 = empty.orElseGet(() -> "computed default");
+  
+  // Throw exception if empty
+  String value3 = empty.orElseThrow();
+  String value4 = empty.orElseThrow(IllegalStateException::new);
+  
+  // Transforming
+  Optional<Integer> length = present.map(String::length);
+  Optional<String> upper = present.map(String::toUpperCase);
+  
+  // Filtering
+  Optional<String> filtered = present.filter(s -> s.length() > 3);
+  
+  // flatMap for nested Optionals
+  Optional<String> result = present.flatMap(this::findRelated);
+  ```
+</Accordion>
+
+## Complete Example
+
+```java
+import java.util.*;
+import java.util.stream.*;
+
+public class CollectionsExample {
+    public static void main(String[] args) {
+        // Create a list of numbers
+        List<Integer> numbers = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+        
+        // Stream processing
+        List<Integer> evenSquares = numbers.stream()
+            .filter(n -> n % 2 == 0)           // Keep only even numbers
+            .map(n -> n * n)                   // Square each number
+            .collect(Collectors.toList());     // [4, 16, 36, 64, 100]
+        
+        // Working with Maps
+        Map<String, Integer> inventory = new HashMap<>();
+        inventory.put("apple", 10);
+        inventory.put("banana", 5);
+        inventory.put("orange", 8);
+        
+        // Update inventory
+        inventory.merge("apple", 5, Integer::sum);    // apple: 15
+        inventory.computeIfAbsent("grape", k -> 0);   // grape: 0
+        
+        // Process entries
+        inventory.forEach((fruit, count) -> 
+            System.out.println(fruit + ": " + count));
+        
+        // Working with Sets
+        Set<String> set1 = new HashSet<>(Arrays.asList("a", "b", "c"));
+        Set<String> set2 = new HashSet<>(Arrays.asList("b", "c", "d"));
+        
+        // Union
+        Set<String> union = new HashSet<>(set1);
+        union.addAll(set2);  // [a, b, c, d]
+        
+        // Intersection
+        Set<String> intersection = new HashSet<>(set1);
+        intersection.retainAll(set2);  // [b, c]
+        
+        // Difference
+        Set<String> diff = new HashSet<>(set1);
+        diff.removeAll(set2);  // [a]
+    }
+}
+```
+
+<Note>
+  The Collections Framework is designed to be interoperable. All implementations provide constructors that accept other collection types, making it easy to convert between different collection types.
+</Note>

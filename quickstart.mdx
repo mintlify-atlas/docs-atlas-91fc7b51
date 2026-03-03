@@ -1,80 +1,255 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick start
+description: Build the JDK from source in just a few steps. This guide walks you through cloning the repository, configuring, building, and verifying your first JDK.
 ---
 
-## Get started in three steps
+This guide will get you building the JDK quickly. These simple steps work most of the time, assuming you have installed Git (and Cygwin, MSYS2, or WSL if running on Windows).
 
-Get your documentation site running locally and make your first customization.
+<Info>
+  If you encounter issues during any step, the configure script will typically suggest how to resolve missing dependencies for your platform.
+</Info>
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+Before you begin, ensure you have:
+
+- Git installed and configured
+- A C/C++ compiler toolchain (gcc/clang on Linux/macOS, Visual Studio on Windows)
+- A Boot JDK (typically the previous major version of Java)
+- At least 6 GB of free disk space
+- 2-4 GB of RAM (more is better)
+
+<Warning>
+  On Windows, you'll need a POSIX support layer: Cygwin (recommended), MSYS2, or WSL. Do not check out the source code in a path with spaces or a very long name.
+</Warning>
+
+## Build steps
+
+<Steps>
+  <Step title="Clone the repository">
+    Get the complete source code from the OpenJDK Git repository:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```bash
+    git clone https://git.openjdk.org/jdk
+    ```
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    This clones the main-line JDK repository (the actively developed version). For older versions like JDK 17, use the update repositories:
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```bash
+    git clone https://git.openjdk.org/jdk17u
+    ```
+    
+    <Info>
+      The clone will take some time as the JDK repository contains the complete history of the project.
+    </Info>
+  </Step>
+  
+  <Step title="Navigate to the source directory">
+    Change into the cloned repository:
+    
+    ```bash
+    cd jdk
+    ```
+  </Step>
+  
+  <Step title="Run configure">
+    The configure script detects your build environment and sets up the build configuration:
+    
+    ```bash
+    bash configure
+    ```
+    
+    If configure fails due to missing dependencies, it will print suggestions on how to resolve the issue. Common missing dependencies include:
+    
+    <Tabs>
+      <Tab title="Linux (apt)">
+        ```bash
+        # Install build tools
+        sudo apt-get install build-essential autoconf
+        
+        # Install required libraries
+        sudo apt-get install libfreetype6-dev libcups2-dev \
+          libx11-dev libxext-dev libxrender-dev libxrandr-dev \
+          libxtst-dev libxt-dev libasound2-dev libfontconfig-dev
+        ```
+      </Tab>
+      
+      <Tab title="Linux (yum)">
+        ```bash
+        # Install development tools
+        sudo yum groupinstall "Development Tools"
+        
+        # Install required libraries
+        sudo yum install cups-devel libXtst-devel libXt-devel \
+          libXrender-devel libXrandr-devel libXi-devel \
+          alsa-lib-devel fontconfig-devel
+        ```
+      </Tab>
+      
+      <Tab title="macOS">
+        ```bash
+        # Install Xcode Command Line Tools
+        xcode-select --install
+        
+        # Install autoconf (using Homebrew)
+        brew install autoconf
+        
+        # Optionally install additional libraries
+        brew install freetype
+        ```
+      </Tab>
+      
+      <Tab title="Windows (Cygwin)">
+        ```bash
+        # Install required Cygwin packages
+        <path to Cygwin setup>/setup-x86_64 -q -P autoconf -P make -P unzip -P zip
+        ```
+      </Tab>
+    </Tabs>
+    
+    After installing dependencies, run `bash configure` again.
+    
+    <Note>
+      If configure can't find your Boot JDK automatically, specify it with `--with-boot-jdk=/path/to/jdk`.
+    </Note>
+  </Step>
+  
+  <Step title="Run make">
+    Build the JDK images with a single command:
+    
+    ```bash
+    make images
+    ```
+    
+    This creates a complete JDK image ready for use. The build process:
+    - Compiles all Java classes
+    - Builds native libraries and executables
+    - Creates the final JDK directory structure
+    - Packages everything into a usable JDK installation
+    
+    <Info>
+      The first build will take some time (15 minutes to several hours depending on your hardware). Subsequent incremental builds are much faster.
+    </Info>
+    
+    The build output will be located at:
+    ```
+    ./build/*/images/jdk/
+    ```
+    
+    The actual path depends on your platform and configuration (e.g., `build/linux-x64-server-release/images/jdk/`).
+  </Step>
+  
+  <Step title="Verify your build">
+    Test your newly built JDK by checking its version:
+    
+    ```bash
+    ./build/*/images/jdk/bin/java -version
+    ```
+    
+    You should see output similar to:
+    ```
+    openjdk version "23-internal" 2024-09-17
+    OpenJDK Runtime Environment (build 23-internal+0-adhoc...)
+    OpenJDK 64-Bit Server VM (build 23-internal+0-adhoc...)
+    ```
+    
+    <Note>
+      The version string will show "internal" for development builds. You can customize this with configure options like `--with-version-string`.
+    </Note>
+  </Step>
+  
+  <Step title="Run basic tests (optional)">
+    Verify your build works correctly by running the tier 1 test suite:
+    
+    ```bash
+    make test-tier1
+    ```
+    
+    This runs a comprehensive set of basic tests to ensure your JDK is functioning properly. The tests include:
+    - Core Java API tests
+    - JVM functionality tests
+    - Compiler tests
+    - Basic runtime tests
+    
+    <Warning>
+      Tests require JTReg to be installed. Configure JTReg location with `--with-jtreg=/path/to/jtreg` during the configure step.
+    </Warning>
+  </Step>
+</Steps>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+## Common configure options
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+Customize your build with these helpful configure arguments:
 
-### Step 3: Go live
+<CodeGroup>
+```bash Debug build
+# Build with debug symbols and assertions enabled
+bash configure --enable-debug
+make images
+```
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+```bash Specific JVM variant
+# Build only the server VM
+bash configure --with-jvm-variants=server
+make images
+```
+
+```bash Custom Boot JDK
+# Specify Boot JDK location explicitly
+bash configure --with-boot-jdk=/path/to/jdk-22
+make images
+```
+
+```bash 32-bit build on 64-bit system
+# Create a 32-bit JDK on a 64-bit machine
+bash configure --with-target-bits=32
+make images
+```
+</CodeGroup>
+
+## Build targets
+
+Instead of `make images`, you can use other targets:
+
+| Target | Description |
+| ------ | ----------- |
+| `make` (default) | Builds exploded image for development |
+| `make images` | Builds complete JDK image |
+| `make hotspot` | Builds only the HotSpot JVM |
+| `make docs` | Builds documentation |
+| `make test-tier1` | Runs tier 1 test suite |
+| `make clean` | Removes build artifacts |
+| `make dist-clean` | Removes build artifacts and configuration |
+
+## Troubleshooting
+
+### Configure fails to find dependencies
+
+Read the error message carefully - configure usually suggests the exact package to install for your platform.
+
+### Build runs out of memory
+
+Reduce parallel jobs:
+```bash
+make images JOBS=2
+```
+
+### Long build times
+
+Ensure you're using an SSD for the build. Also consider:
+- Building only what you need: `make` instead of `make images`
+- Using a more powerful machine
+- Enabling ccache if available
+
+### Spaces in path (Windows)
+
+Do not check out the source code in a path containing spaces. Windows paths like `C:\Program Files\jdk` will fail.
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+Congratulations! You've successfully built the JDK. Next, you might want to:
 
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+- Learn about [advanced build configuration](/building/configuration)
+- Explore [testing your changes](/development/testing)
+- Read about [making changes and contributing](/development/contributing)
+- Understand the [build system architecture](/building/overview)

@@ -1,0 +1,545 @@
+---
+title: java.nio
+description: New I/O APIs providing high-performance, non-blocking I/O with buffers, channels, and selectors
+---
+
+The `java.nio` package provides the New I/O (NIO) APIs introduced in Java 1.4, offering scalable, high-performance I/O operations. The package includes buffers for efficient data handling, channels for I/O operations, and selectors for multiplexed, non-blocking I/O.
+
+## Core Concepts
+
+NIO is built around three core abstractions:
+
+1. **Buffers** - Containers for data of specific primitive types
+2. **Channels** - Connections to I/O devices (files, sockets, etc.)
+3. **Selectors** - Multiplexing of non-blocking channels
+
+## Buffer Classes
+
+### Buffer
+
+The abstract `Buffer` class is the foundation for all buffer types. A buffer is a linear, finite sequence of elements of a specific primitive type.
+
+```java
+public abstract class Buffer
+```
+
+A buffer has four essential properties:
+- **Capacity** - The number of elements it contains (never changes)
+- **Limit** - The index of the first element that should not be read or written
+- **Position** - The index of the next element to be read or written
+- **Mark** - The index to which position will be reset when `reset()` is called
+
+Invariant: `0 <= mark <= position <= limit <= capacity`
+
+<Tabs>
+  <Tab title="Buffer Operations">
+    ```java
+    ByteBuffer buffer = ByteBuffer.allocate(1024);
+    
+    // Writing data
+    buffer.put((byte) 42);
+    buffer.put("Hello".getBytes());
+    
+    // Prepare for reading
+    buffer.flip();  // Sets limit to position, position to 0
+    
+    // Reading data
+    byte b = buffer.get();
+    byte[] bytes = new byte[5];
+    buffer.get(bytes);
+    
+    // Clear for reuse
+    buffer.clear();  // Sets position to 0, limit to capacity
+    ```
+  </Tab>
+  <Tab title="Buffer States">
+    ```java
+    ByteBuffer buffer = ByteBuffer.allocate(10);
+    // capacity=10, position=0, limit=10
+    
+    buffer.put((byte) 1);
+    buffer.put((byte) 2);
+    buffer.put((byte) 3);
+    // capacity=10, position=3, limit=10
+    
+    buffer.flip();
+    // capacity=10, position=0, limit=3
+    
+    buffer.get(); // reads first byte
+    // capacity=10, position=1, limit=3
+    
+    buffer.compact();
+    // capacity=10, position=2, limit=10
+    // Remaining unread data moved to beginning
+    ```
+  </Tab>
+</Tabs>
+
+<ResponseField name="Buffer Methods" type="operations">
+  - **clear()** - Prepares buffer for writing (position=0, limit=capacity)
+  - **flip()** - Prepares buffer for reading (limit=position, position=0)
+  - **rewind()** - Prepares for re-reading (position=0, limit unchanged)
+  - **compact()** - Prepares for writing after partial read
+  - **mark()** - Sets mark at current position
+  - **reset()** - Resets position to previously marked position
+</ResponseField>
+
+### ByteBuffer
+
+The most commonly used buffer type, providing byte-level access with views for other primitive types.
+
+```java
+public abstract class ByteBuffer extends Buffer implements Comparable<ByteBuffer>
+```
+
+<Tabs>
+  <Tab title="Direct vs Heap">
+    ```java
+    // Heap buffer - allocated in JVM heap
+    ByteBuffer heapBuffer = ByteBuffer.allocate(1024);
+    
+    // Direct buffer - allocated outside heap (native memory)
+    ByteBuffer directBuffer = ByteBuffer.allocateDirect(1024);
+    
+    // Direct buffers are more efficient for I/O operations
+    // but more expensive to allocate/deallocate
+    System.out.println("Is direct? " + directBuffer.isDirect());
+    ```
+  </Tab>
+  <Tab title="Typed Views">
+    ```java
+    ByteBuffer buffer = ByteBuffer.allocate(1024);
+    
+    // Put different data types
+    buffer.putInt(42);
+    buffer.putLong(123456789L);
+    buffer.putDouble(3.14159);
+    buffer.put("Hello".getBytes());
+    
+    // Flip and read back
+    buffer.flip();
+    int i = buffer.getInt();
+    long l = buffer.getLong();
+    double d = buffer.getDouble();
+    
+    // Create typed views
+    buffer.clear();
+    IntBuffer intView = buffer.asIntBuffer();
+    intView.put(new int[]{1, 2, 3, 4, 5});
+    ```
+  </Tab>
+  <Tab title="Byte Order">
+    ```java
+    ByteBuffer buffer = ByteBuffer.allocate(8);
+    
+    // Set byte order
+    buffer.order(ByteOrder.BIG_ENDIAN);
+    buffer.putInt(0x12345678);
+    
+    buffer.order(ByteOrder.LITTLE_ENDIAN);
+    buffer.putInt(0x12345678);
+    
+    // Check system default
+    ByteOrder nativeOrder = ByteOrder.nativeOrder();
+    System.out.println("Native order: " + nativeOrder);
+    ```
+  </Tab>
+</Tabs>
+
+### Other Buffer Types
+
+NIO provides specialized buffer classes for each primitive type:
+
+- **CharBuffer** - Character data
+- **ShortBuffer** - 16-bit integers
+- **IntBuffer** - 32-bit integers
+- **LongBuffer** - 64-bit integers
+- **FloatBuffer** - 32-bit floating point
+- **DoubleBuffer** - 64-bit floating point
+
+```java
+// CharBuffer for text processing
+CharBuffer charBuffer = CharBuffer.allocate(100);
+charBuffer.put("Hello, NIO!");
+charBuffer.flip();
+System.out.println(charBuffer);
+
+// IntBuffer for numeric data
+IntBuffer intBuffer = IntBuffer.allocate(10);
+for (int i = 0; i < 10; i++) {
+    intBuffer.put(i * i);
+}
+```
+
+## Channel Classes
+
+Channels represent connections to entities capable of I/O operations (files, sockets, etc.). Unlike streams, channels can be non-blocking and work directly with buffers.
+
+### FileChannel
+
+A channel for reading, writing, mapping, and manipulating files.
+
+```java
+public abstract class FileChannel extends AbstractInterruptibleChannel
+    implements SeekableByteChannel, GatheringByteChannel, ScatteringByteChannel
+```
+
+<Tabs>
+  <Tab title="Basic File I/O">
+    ```java
+    // Reading from file
+    try (FileChannel channel = FileChannel.open(
+            Paths.get("input.txt"), StandardOpenOption.READ)) {
+        
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        
+        while (channel.read(buffer) > 0) {
+            buffer.flip();
+            
+            // Process buffer content
+            while (buffer.hasRemaining()) {
+                System.out.print((char) buffer.get());
+            }
+            
+            buffer.clear();
+        }
+    }
+    
+    // Writing to file
+    try (FileChannel channel = FileChannel.open(
+            Paths.get("output.txt"),
+            StandardOpenOption.CREATE,
+            StandardOpenOption.WRITE)) {
+        
+        ByteBuffer buffer = ByteBuffer.wrap("Hello, FileChannel!".getBytes());
+        channel.write(buffer);
+    }
+    ```
+  </Tab>
+  <Tab title="Memory Mapped Files">
+    ```java
+    try (FileChannel channel = FileChannel.open(
+            Paths.get("large-file.dat"),
+            StandardOpenOption.READ, StandardOpenOption.WRITE)) {
+        
+        // Map file to memory (efficient for large files)
+        MappedByteBuffer mappedBuffer = channel.map(
+            FileChannel.MapMode.READ_WRITE,
+            0,  // position
+            channel.size()  // size
+        );
+        
+        // Direct memory access
+        mappedBuffer.put(0, (byte) 'X');
+        byte b = mappedBuffer.get(100);
+        
+        // Changes are automatically synced to disk
+    }
+    ```
+  </Tab>
+  <Tab title="File Transfer">
+    ```java
+    // Efficient file copy using transferTo
+    try (FileChannel source = FileChannel.open(
+            Paths.get("source.dat"), StandardOpenOption.READ);
+         FileChannel dest = FileChannel.open(
+            Paths.get("dest.dat"),
+            StandardOpenOption.CREATE,
+            StandardOpenOption.WRITE)) {
+        
+        // Zero-copy transfer (uses OS-level optimization)
+        long position = 0;
+        long count = source.size();
+        source.transferTo(position, count, dest);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### SocketChannel
+
+A selectable channel for stream-oriented connecting sockets.
+
+```java
+public abstract class SocketChannel extends AbstractSelectableChannel
+    implements ByteChannel, ScatteringByteChannel, GatheringByteChannel, NetworkChannel
+```
+
+<Tabs>
+  <Tab title="Blocking Mode">
+    ```java
+    // Connect to server (blocking)
+    SocketChannel channel = SocketChannel.open();
+    channel.connect(new InetSocketAddress("example.com", 8080));
+    
+    // Write data
+    ByteBuffer buffer = ByteBuffer.wrap("GET / HTTP/1.1\r\n\r\n".getBytes());
+    channel.write(buffer);
+    
+    // Read response
+    buffer.clear();
+    int bytesRead = channel.read(buffer);
+    
+    buffer.flip();
+    while (buffer.hasRemaining()) {
+        System.out.print((char) buffer.get());
+    }
+    
+    channel.close();
+    ```
+  </Tab>
+  <Tab title="Non-Blocking Mode">
+    ```java
+    SocketChannel channel = SocketChannel.open();
+    channel.configureBlocking(false);
+    channel.connect(new InetSocketAddress("example.com", 8080));
+    
+    // Connection may not complete immediately
+    while (!channel.finishConnect()) {
+        System.out.println("Connecting...");
+        Thread.sleep(100);
+    }
+    
+    ByteBuffer buffer = ByteBuffer.allocate(1024);
+    
+    // Non-blocking read
+    int bytesRead = channel.read(buffer);
+    if (bytesRead == -1) {
+        // Channel closed
+        channel.close();
+    } else if (bytesRead == 0) {
+        // No data available yet
+        System.out.println("No data available");
+    } else {
+        // Process data
+        buffer.flip();
+        // ... process buffer
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### ServerSocketChannel
+
+A selectable channel for stream-oriented listening sockets.
+
+```java
+public abstract class ServerSocketChannel extends AbstractSelectableChannel
+    implements NetworkChannel
+```
+
+<Tabs>
+  <Tab title="Blocking Server">
+    ```java
+    ServerSocketChannel serverChannel = ServerSocketChannel.open();
+    serverChannel.bind(new InetSocketAddress(8080));
+    
+    System.out.println("Server listening on port 8080");
+    
+    while (true) {
+        // Accept client connection (blocking)
+        SocketChannel clientChannel = serverChannel.accept();
+        
+        // Handle client
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        clientChannel.read(buffer);
+        
+        buffer.flip();
+        clientChannel.write(buffer);
+        
+        clientChannel.close();
+    }
+    ```
+  </Tab>
+  <Tab title="Non-Blocking Server">
+    ```java
+    ServerSocketChannel serverChannel = ServerSocketChannel.open();
+    serverChannel.configureBlocking(false);
+    serverChannel.bind(new InetSocketAddress(8080));
+    
+    while (true) {
+        SocketChannel clientChannel = serverChannel.accept();
+        
+        if (clientChannel == null) {
+            // No connection available
+            Thread.sleep(100);
+        } else {
+            // Configure client channel
+            clientChannel.configureBlocking(false);
+            // Handle client...
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### DatagramChannel
+
+A selectable channel for datagram-oriented sockets (UDP).
+
+```java
+// Send UDP packet
+DatagramChannel channel = DatagramChannel.open();
+ByteBuffer buffer = ByteBuffer.wrap("Hello, UDP!".getBytes());
+channel.send(buffer, new InetSocketAddress("example.com", 9876));
+
+// Receive UDP packet
+DatagramChannel receiver = DatagramChannel.open();
+receiver.bind(new InetSocketAddress(9876));
+ByteBuffer receiveBuffer = ByteBuffer.allocate(1024);
+SocketAddress sender = receiver.receive(receiveBuffer);
+```
+
+## Selector
+
+The `Selector` class enables multiplexed, non-blocking I/O. A single selector can monitor multiple channels for readiness to perform I/O operations.
+
+```java
+public abstract class Selector implements Closeable
+```
+
+<Tabs>
+  <Tab title="Basic Selector">
+    ```java
+    // Create selector
+    Selector selector = Selector.open();
+    
+    // Configure channel and register with selector
+    SocketChannel channel = SocketChannel.open();
+    channel.configureBlocking(false);
+    channel.connect(new InetSocketAddress("example.com", 8080));
+    
+    // Register for CONNECT and READ events
+    SelectionKey key = channel.register(
+        selector,
+        SelectionKey.OP_CONNECT | SelectionKey.OP_READ
+    );
+    
+    // Event loop
+    while (true) {
+        // Wait for events (blocking)
+        int readyChannels = selector.select();
+        
+        if (readyChannels == 0) continue;
+        
+        // Process ready channels
+        Set<SelectionKey> selectedKeys = selector.selectedKeys();
+        Iterator<SelectionKey> keyIterator = selectedKeys.iterator();
+        
+        while (keyIterator.hasNext()) {
+            SelectionKey selectedKey = keyIterator.next();
+            
+            if (selectedKey.isConnectable()) {
+                // Handle connection
+            } else if (selectedKey.isReadable()) {
+                // Handle read
+            } else if (selectedKey.isWritable()) {
+                // Handle write
+            }
+            
+            keyIterator.remove();
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="Multi-Client Server">
+    ```java
+    Selector selector = Selector.open();
+    
+    ServerSocketChannel serverChannel = ServerSocketChannel.open();
+    serverChannel.configureBlocking(false);
+    serverChannel.bind(new InetSocketAddress(8080));
+    serverChannel.register(selector, SelectionKey.OP_ACCEPT);
+    
+    while (true) {
+        selector.select();
+        
+        Iterator<SelectionKey> keys = selector.selectedKeys().iterator();
+        
+        while (keys.hasNext()) {
+            SelectionKey key = keys.next();
+            keys.remove();
+            
+            if (!key.isValid()) continue;
+            
+            if (key.isAcceptable()) {
+                // Accept new connection
+                ServerSocketChannel server = (ServerSocketChannel) key.channel();
+                SocketChannel client = server.accept();
+                client.configureBlocking(false);
+                client.register(selector, SelectionKey.OP_READ);
+            }
+            else if (key.isReadable()) {
+                // Read from client
+                SocketChannel client = (SocketChannel) key.channel();
+                ByteBuffer buffer = ByteBuffer.allocate(1024);
+                
+                int bytesRead = client.read(buffer);
+                if (bytesRead == -1) {
+                    client.close();
+                } else {
+                    buffer.flip();
+                    key.interestOps(SelectionKey.OP_WRITE);
+                    key.attach(buffer);
+                }
+            }
+            else if (key.isWritable()) {
+                // Write to client
+                SocketChannel client = (SocketChannel) key.channel();
+                ByteBuffer buffer = (ByteBuffer) key.attachment();
+                
+                client.write(buffer);
+                
+                if (!buffer.hasRemaining()) {
+                    key.interestOps(SelectionKey.OP_READ);
+                }
+            }
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<ResponseField name="Selection Key Operations" type="constants">
+  - **OP_READ** - Channel is ready for reading
+  - **OP_WRITE** - Channel is ready for writing
+  - **OP_CONNECT** - Channel has completed connection
+  - **OP_ACCEPT** - Channel is ready to accept a connection
+</ResponseField>
+
+## MappedByteBuffer
+
+A direct byte buffer whose content is a memory-mapped region of a file.
+
+```java
+try (FileChannel channel = FileChannel.open(
+        Paths.get("data.bin"), StandardOpenOption.READ, StandardOpenOption.WRITE)) {
+    
+    MappedByteBuffer mappedBuffer = channel.map(
+        FileChannel.MapMode.READ_WRITE, 0, 1024
+    );
+    
+    // Efficient random access
+    mappedBuffer.putInt(0, 42);
+    mappedBuffer.putLong(4, System.currentTimeMillis());
+    
+    // Force changes to disk
+    mappedBuffer.force();
+}
+```
+
+<Note>
+  NIO's buffer-channel architecture provides better performance than traditional stream-based I/O for many use cases, especially when dealing with large amounts of data or when multiplexing I/O operations across multiple connections.
+</Note>
+
+## Related Packages
+
+- **java.nio.channels** - Channel and selector implementations
+- **java.nio.charset** - Character encoding/decoding
+- **java.nio.file** - File system access (Java 7+)
+- **java.net** - Traditional networking APIs
+
+## See Also
+
+- [java.net](/api/java-net) - Traditional networking APIs
+- [java.nio.file](/api/java-nio-file) - File system APIs

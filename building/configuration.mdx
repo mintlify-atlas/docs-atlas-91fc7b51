@@ -1,0 +1,596 @@
+---
+title: Configure Script Options
+description: Comprehensive guide to configure script options, arguments, and configuration management
+---
+
+The `configure` script creates a build configuration that defines where to store build output, platform information, and build choices.
+
+## Running Configure
+
+### Basic Invocation
+
+```bash
+bash configure [options]
+```
+
+This creates an output directory like `build/linux-x64-server-release` (referred to as `$BUILD`).
+
+<Info>
+  The configure script analyzes your system and selects reasonable defaults. If it fails to detect components automatically, it will exit with an error message and suggestions.
+</Info>
+
+### Example Configurations
+
+```bash
+# 32-bit Windows build with custom FreeType location
+bash configure --with-freetype=/cygdrive/c/freetype-i586 --with-target-bits=32
+
+# Debug build with server JVM and DTrace enabled
+bash configure --enable-debug --with-jvm-variants=server --enable-dtrace
+
+# Build with specific boot JDK
+bash configure --with-boot-jdk=/usr/lib/jvm/java-21-openjdk
+```
+
+### Getting Help
+
+```bash
+# All configure options (including autoconf options)
+bash configure --help
+
+# JDK-specific options only
+bash configure --help=short
+```
+
+## Configure Arguments for Tailoring the Build
+
+### Debug Levels
+
+<Tabs>
+  <Tab title="--enable-debug">
+    Shorthand for `--with-debug-level=fastdebug`
+    
+    ```bash
+    bash configure --enable-debug
+    ```
+  </Tab>
+
+  <Tab title="--with-debug-level=<level>">
+    Set specific debug level:
+    - `release` - Default, optimized production build
+    - `fastdebug` - Debug build with good performance
+    - `slowdebug` - Full debug build with assertions
+    - `optimized` - Release variant with additional Hotspot debug code
+
+    ```bash
+    bash configure --with-debug-level=slowdebug
+    ```
+  </Tab>
+</Tabs>
+
+### Debug Symbols
+
+```bash
+--with-native-debug-symbols=<method>
+```
+
+Available methods:
+- `none` - No debug symbols generated
+- `internal` - Debug symbols stored in binary
+- `external` - Debug symbols in separate `.debuginfo` file
+- `zipped` - Debug symbols in separate `.debuginfo` file, then zipped to `.diz`
+
+<Info>
+  For distribution builds, use `zipped`. For development, use `internal`.
+</Info>
+
+### Version String Customization
+
+```bash
+# Set complete version string
+bash configure --with-version-string="21.0.1+12-custom"
+
+# Set individual version parts
+bash configure --with-version-opt=custom-build
+bash configure --with-version-pre=ea
+bash configure --with-version-build=42
+```
+
+Version parts: `major`, `minor`, `security`, `patch`, `pre`, `opt`, `build`
+
+### JVM Variants
+
+```bash
+--with-jvm-variants=<variant>[,<variant>...]
+```
+
+Valid variants:
+- `server` - Server VM (default)
+- `client` - Client VM (reduced footprint)
+- `minimal` - Minimal VM
+- `core` - Core VM
+- `zero` - Zero-assembly VM (portable)
+- `custom` - Custom VM with specific features
+
+```bash
+# Build both server and client
+bash configure --with-jvm-variants=server,client
+
+# Build zero VM
+bash configure --with-jvm-variants=zero
+```
+
+### JVM Features
+
+Enable or disable specific Hotspot features:
+
+```bash
+# Enable a feature
+bash configure --enable-jvm-feature-<feature>
+
+# Disable a feature
+bash configure --disable-jvm-feature-<feature>
+
+# Multiple features
+bash configure --with-jvm-features=compiler2,jvmci,-dtrace
+```
+
+Prefix features with `-` to disable them.
+
+### Target Bits
+
+```bash
+# Create 32-bit output on 64-bit build machine
+bash configure --with-target-bits=32
+```
+
+<Note>
+  This creates a "reduced" build, not a full cross-compile.
+</Note>
+
+### JNI Library Path (Linux, BSD, AIX)
+
+```bash
+--with-jni-libpath=<path>
+```
+
+Override default search path for runtime/JNI libraries. Can be overridden at runtime with `java.library.path`.
+
+## Native Compilation Arguments
+
+### Devkit and Sysroot
+
+```bash
+# Use a devkit for compilers, tools, and resources
+bash configure --with-devkit=/path/to/devkit
+
+# Use specific sysroot directory
+bash configure --with-sysroot=/path/to/sysroot
+```
+
+### Toolchain Paths
+
+```bash
+# Prepend to default path for all binaries
+bash configure --with-extra-path=/opt/tools/bin:/opt/gnu/bin
+
+# Prepend when searching for toolchain binaries only
+bash configure --with-toolchain-path=/opt/gcc/bin
+```
+
+<Note>
+  On Windows, use Unix-style paths with Cygwin, e.g., `/cygdrive/c/tools`
+</Note>
+
+### Compiler Flags
+
+<Accordion title="Extra compiler and linker flags">
+  ```bash
+  # Extra C compiler flags
+  bash configure --with-extra-cflags="-O3 -march=native"
+
+  # Extra C++ compiler flags
+  bash configure --with-extra-cxxflags="-std=c++17"
+
+  # Extra linker flags
+  bash configure --with-extra-ldflags="-Wl,-rpath,/opt/lib"
+  ```
+
+  <Warning>
+    Setting `CFLAGS` environment variable will **not** work. Use `--with-extra-cflags` instead.
+  </Warning>
+</Accordion>
+
+### Toolchain Selection
+
+```bash
+# Use specific toolchain type on Linux
+bash configure --with-toolchain-type=clang
+
+# Select Visual Studio version on Windows
+bash configure --with-toolchain-version=2022
+
+# Use specific Xcode on macOS
+bash configure --with-xcode-path=/Applications/Xcode15.4.app
+```
+
+## External Dependencies Arguments
+
+### Boot JDK
+
+```bash
+bash configure --with-boot-jdk=/usr/lib/jvm/java-21-openjdk
+```
+
+### External Libraries
+
+```bash
+# FreeType
+bash configure --with-freetype=/usr/local/freetype
+# Or separate include and lib paths
+bash configure --with-freetype-include=/usr/include/freetype2 \
+               --with-freetype-lib=/usr/lib/x86_64-linux-gnu
+
+# CUPS
+bash configure --with-cups=/usr/local/cups
+
+# X11
+bash configure --with-x=/usr/X11R6
+
+# ALSA
+bash configure --with-alsa=/usr/local/alsa
+
+# libffi (for Zero VM)
+bash configure --with-libffi=/usr/local/libffi
+```
+
+### Bundled Library Sources
+
+Choose between bundled or system versions of third-party libraries:
+
+```bash
+--with-libjpeg=<source>   # Default: bundled
+--with-giflib=<source>    # Default: bundled
+--with-libpng=<source>    # Default: bundled
+--with-lcms=<source>      # Default: bundled
+--with-zlib=<source>      # Default: system (except Windows/AIX)
+```
+
+Where `<source>` is `bundled` or `system`.
+
+```bash
+# Use system libpng instead of bundled
+bash configure --with-libpng=system
+```
+
+### C++ Runtime Linking (Linux)
+
+```bash
+--with-stdc++lib=<method>
+```
+
+Methods: `static` (default), `dynamic`, or `default` (static with dynamic fallback)
+
+### Test Frameworks
+
+```bash
+# JTReg test framework
+bash configure --with-jtreg=/path/to/jtreg
+
+# Google Test framework (for Hotspot Gtest)
+bash configure --with-gtest=/path/to/googletest
+```
+
+<Info>
+  Download JTReg from [Adoptium builds](https://ci.adoptium.net/view/Dependencies/job/dependency_pipeline/lastSuccessfulBuild/artifact/jtreg/).
+  
+  Google Test minimum version is 1.14.0.
+</Info>
+
+## Configure Control Variables
+
+<Warning>
+  Control variables should be used sparingly. Incorrect use can lead to broken configurations.
+</Warning>
+
+Control variables are meant to describe tool locations:
+
+```bash
+# Specify autoconf location
+AUTOCONF=/opt/autoconf/bin/autoconf bash configure
+
+# Specify make location
+bash configure MAKE=/opt/gnu/make
+
+# Specify JTReg location (prefer --with-jtreg instead)
+bash configure JTREGEXE=/path/to/jtreg/bin/jtreg
+```
+
+<Note>
+  If a corresponding `--with-*` option exists, prefer using that instead of control variables.
+</Note>
+
+## Build Performance Configuration
+
+### Resource Limits
+
+```bash
+# Set number of cores
+bash configure --with-num-cores=8
+
+# Set memory size (in MB)
+bash configure --with-memory-size=16384
+
+# Set number of build jobs directly
+bash configure --with-jobs=12
+
+# Set boot JDK JVM arguments
+bash configure --with-boot-jdk-jvmargs="-Xmx8G"
+```
+
+<Info>
+  Configure analyzes your system and selects reasonable defaults. Only override if you encounter resource problems.
+</Info>
+
+### Build Acceleration
+
+<Accordion title="Ccache">
+  Enable [ccache](https://ccache.dev/) for faster native code recompilation:
+  
+  ```bash
+  bash configure --enable-ccache
+  ```
+  
+  Ccache must be on your PATH.
+</Accordion>
+
+<Accordion title="Precompiled Headers">
+  Precompiled headers (PCH) are enabled by default for clang, gcc, and Visual Studio.
+  
+  To disable if they slow down your build:
+  ```bash
+  bash configure --disable-precompiled-headers
+  ```
+</Accordion>
+
+<Accordion title="Icecc/Icecream">
+  Enable distributed compilation:
+  
+  ```bash
+  bash configure --enable-icecc
+  ```
+  
+  Requires [icecc network](https://github.com/icecc/icecream) setup.
+</Accordion>
+
+<Accordion title="Javac Server">
+  Enabled by default for faster Java compilation.
+  
+  To explicitly control:
+  ```bash
+  bash configure --enable-javac-server   # Enable
+  bash configure --disable-javac-server  # Disable
+  ```
+</Accordion>
+
+## Platform-Specific Configuration
+
+### macOS Code Signing
+
+```bash
+# Hardened signing for distribution/notarization
+bash configure --with-macosx-codesign=hardened \
+               --with-macosx-codesign-identity="Developer ID Application: Name"
+
+# Debug signing (ad-hoc with debugging entitlements)
+bash configure --with-macosx-codesign=debug
+
+# Disable codesigning
+bash configure --without-macosx-codesign
+
+# Auto mode (default: tries hardened, falls back to debug)
+bash configure --with-macosx-codesign=auto
+```
+
+### Cross-Compilation
+
+```bash
+# Specify target platform
+bash configure --openjdk-target=aarch64-linux-gnu
+
+# With devkit
+bash configure --openjdk-target=aarch64-linux-gnu \
+               --with-devkit=/path/to/devkit
+
+# With sysroot and toolchain path
+bash configure --openjdk-target=arm-linux-gnueabihf \
+               --with-sysroot=/path/to/sysroot \
+               --with-toolchain-path=/opt/cross/bin
+
+# Specify build JDK for cross-compilation
+bash configure --with-build-jdk=/path/to/build-jdk
+```
+
+<Info>
+  `--openjdk-target` automatically sets `--host` and `--target` for autoconf.
+</Info>
+
+### Windows on AArch64
+
+```bash
+# Native build (Visual Studio Build Tools)
+vs_buildtools.exe --quiet --wait --norestart --nocache ^
+  --installPath "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\BuildTools" ^
+  --add Microsoft.VisualStudio.Component.VC.CoreBuildTools ^
+  --add Microsoft.VisualStudio.Component.VC.Tools.ARM64 ^
+  --add Microsoft.VisualStudio.Component.Windows11SDK.22621
+
+# Cross-compile from Windows x64 using Cygwin
+bash configure --openjdk-target=aarch64-unknown-cygwin
+```
+
+## Reproducible Builds
+
+<Steps>
+  <Step title="Set SOURCE_DATE_EPOCH before configure">
+    ```bash
+    export SOURCE_DATE_EPOCH=946684800  # 2000-01-01 00:00:00 UTC
+    ```
+  </Step>
+
+  <Step title="Set fixed version string">
+    ```bash
+    bash configure --with-version-opt=adhoc
+    # Or use a complete version string
+    bash configure --with-version-string="21.0.1+12-reproducible"
+    ```
+  </Step>
+
+  <Step title="Run make">
+    ```bash
+    make images
+    ```
+  </Step>
+</Steps>
+
+### Reproducible Build Options
+
+<Accordion title="Source date control">
+  ```bash
+  # Use specific epoch timestamp
+  bash configure --with-source-date=946684800
+
+  # Use ISO-8601 date
+  bash configure --with-source-date="2000-01-01T00:00:00Z"
+
+  # Use configure time (default if SOURCE_DATE_EPOCH not set)
+  bash configure --with-source-date=current
+
+  # Use version's nominal release date
+  bash configure --with-source-date=version
+
+  # Update timestamp on each make run (non-reproducible)
+  bash configure --with-source-date=updated
+  ```
+</Accordion>
+
+<Accordion title="Build timestamp control">
+  ```bash
+  # Set Hotspot build time
+  bash configure --with-hotspot-build-time="2000-01-01T00:00:00Z"
+
+  # Set copyright year
+  bash configure --with-copyright-year=2024
+
+  # Enable reproducible build mode
+  bash configure --enable-reproducible-build
+  ```
+</Accordion>
+
+## Multiple Configurations
+
+### Creating Named Configurations
+
+```bash
+# Method 1: Use --with-conf-name
+bash configure --with-conf-name=fastdebug --enable-debug
+
+# Method 2: Run configure from a subdirectory
+mkdir -p build/my-config
+cd build/my-config
+bash ../../configure --enable-debug
+```
+
+### Building Specific Configurations
+
+```bash
+# Build exact configuration name
+make CONF=fastdebug
+
+# Build all matching configurations (substring match)
+make CONF=debug  # Matches 'fastdebug', 'slowdebug', etc.
+
+# Build all configurations
+make CONF=
+
+# Build all EXCEPT matching
+make CONF=!debug
+
+# Exact match only
+make CONF_NAME=linux-x64-server-fastdebug
+```
+
+## Configuration Management
+
+### Viewing Configuration
+
+```bash
+# Show current configure command line
+make print-configuration
+
+# Save configuration for later reuse
+make print-configuration > my-config.txt
+
+# Restore configuration
+bash configure $(cat my-config.txt)
+```
+
+### Reconfiguration
+
+```bash
+# Manually re-run with same arguments
+make reconfigure
+
+# Automatically reconfigure when configure changes
+make CONF_CHECK=auto
+# Or set in environment
+export CONF_CHECK=auto
+
+# Skip reconfiguration check (risky)
+make CONF_CHECK=ignore
+```
+
+<Info>
+  Add `export CONF_CHECK=auto` to your `.bashrc` to always auto-reconfigure when needed.
+</Info>
+
+## Verification and Diagnostics
+
+### Configuration Summary
+
+After successful configure, check the summary:
+
+```
+Configuration summary:
+ * Debug level:    release
+ * JVM variants:   server
+ * OpenJDK target: OS: linux, CPU: x64
+ * Boot JDK:       java version "21"
+ * Toolchain:      gcc (GNU Compiler Collection)
+```
+
+Verify boot JDK and toolchain are what you expect.
+
+### Performance Summary
+
+Configure shows performance hints:
+
+```
+Build performance summary:
+ * Cores to use:   8
+ * Memory limit:   16384 MB
+```
+
+<Note>
+  Pay attention to performance hints for optimal build speed.
+</Note>
+
+### Troubleshooting Configure Issues
+
+If configure fails:
+
+1. Check the output for specific error messages
+2. Review the full log: `$BUILD/configure.log`
+3. Look for warnings (repeated at the end)
+4. Verify paths use Unix-style format on Windows
+5. Run `make doctor` after configure for diagnostics

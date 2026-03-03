@@ -1,0 +1,410 @@
+---
+title: Build Requirements
+description: Hardware, software, toolchain, and library requirements for building the JDK
+---
+
+Building the JDK requires specific hardware resources, native compilers, build tools, external libraries, and a boot JDK. This page details all requirements.
+
+## Hardware Requirements
+
+### Building on x86
+
+**Minimum requirements:**
+- **CPU**: 2-4 cores
+- **RAM**: 2-4 GB (more memory needed with more cores)
+- **Disk**: At least 6 GB of free space
+- **Storage**: SSD strongly recommended for best performance
+
+<Info>
+  Even for 32-bit builds, use a 64-bit build machine and create a 32-bit target using `--with-target-bits=32`.
+</Info>
+
+### Building on aarch64
+
+**Minimum requirements:**
+- **CPU**: 8 cores minimum
+- **RAM**: 8 GB (more memory needed with more cores)
+- **Disk**: At least 6 GB of free space
+- **Storage**: SSD strongly recommended
+
+<Note>
+  If you don't have sufficiently powerful hardware, consider using cross-compilation.
+</Note>
+
+#### Branch Protection
+
+To use Branch Protection features in the VM, use `--enable-branch-protection`. This requires:
+- GCC 9.1.0+ or Clang 10+
+- Linux target platform only
+- The build can run on machines with or without hardware branch protection support
+
+### Building on 32-bit ARM
+
+<Warning>
+  Building on 32-bit ARM is not recommended. Use cross-compilation instead.
+</Warning>
+
+## Native Compiler (Toolchain) Requirements
+
+### GCC (Linux)
+
+**Minimum version:** 10.0  
+**Tested version:** 14.2.0
+
+```bash
+# Install on Debian/Ubuntu
+sudo apt-get install build-essential autoconf
+
+# Install on Fedora/Red Hat
+sudo yum groupinstall "Development Tools"
+
+# Install on Alpine Linux
+sudo apk add build-base bash grep zip
+```
+
+To use clang instead of gcc on Linux:
+```bash
+bash configure --with-toolchain-type=clang
+```
+
+<Info>
+  The minimum accepted clang version is 13.
+</Info>
+
+### Apple Xcode (macOS)
+
+**Minimum version:** 13.0  
+**Recommended version:** 15.4 or later  
+**macOS version:** 14 or later recommended
+
+Download Xcode from:
+- App Store
+- [Xcode Releases](https://xcodereleases.com) for specific versions
+
+<Accordion title="Using specific Xcode versions">
+  You can keep multiple Xcode versions and select one for building:
+
+  **Option 1: System-wide (using xcode-select)**
+  ```bash
+  xcode-select -s /Applications/Xcode13.1.app
+  bash configure
+  ```
+
+  **Option 2: Per-build (using configure option)**
+  ```bash
+  bash configure --with-xcode-path=/Applications/Xcode13.1.app
+  ```
+
+  The second option is recommended as it doesn't affect other builds.
+</Accordion>
+
+<Warning>
+  Starting with Xcode 26 (macOS 26), the Metal toolchain must be installed separately:
+  ```bash
+  xcodebuild -downloadComponent metalToolchain
+  ```
+</Warning>
+
+### Microsoft Visual Studio (Windows)
+
+**Minimum version:** Visual Studio 2019 version 16.8 (MSVC 14.28, cl.exe 19.28)  
+**Maximum version:** Visual Studio 2026  
+**Tested version:** Visual Studio 2022 version 17.13.2
+
+<Steps>
+  <Step title="Install US English language pack">
+    The US English language pack is **required**. You can add it during installation or modify an existing installation:
+    
+    **GUI Method:**
+    1. Click "Visual Studio Installer" in Start menu
+    2. Click "Modify"
+    3. Select "Language packs" tab
+    4. Choose "English"
+    5. Click "Modify"
+  </Step>
+
+  <Step title="Select toolchain version (if multiple installed)">
+    ```bash
+    bash configure --with-toolchain-version=2022
+    ```
+  </Step>
+</Steps>
+
+<Info>
+  If Visual Studio is installed but not detected, it may be due to spaces in the installation path. See the troubleshooting section.
+</Info>
+
+#### Windows POSIX Support Layer
+
+Windows requires a POSIX support layer. Supported options:
+
+<Tabs>
+  <Tab title="Cygwin (Recommended)">
+    Install [Cygwin](https://www.cygwin.com/) 64-bit version.
+
+    **Required packages:**
+    - `autoconf`
+    - `make`
+    - `zip`
+    - `unzip`
+
+    **Install via command line:**
+    ```bash
+    <path-to-setup>/setup-x86_64.exe -q -P autoconf -P make -P unzip -P zip
+    ```
+
+    <Note>
+      The JDK requires GNU Make 4.0 or greater (Cygwin typically provides this).
+    </Note>
+  </Tab>
+
+  <Tab title="MSYS2">
+    Install [MSYS2](https://www.msys2.org/) as instructed on the home page.
+
+    **Required packages:**
+    ```bash
+    pacman -S autoconf tar make zip unzip
+    ```
+  </Tab>
+
+  <Tab title="WSL (Windows Subsystem for Linux)">
+    Use Windows 10 version 1809 or later with Ubuntu guest.
+
+    **For Windows binaries:**
+    - Use Windows boot JDK (in Windows-accessible directory)
+    - Source code must be in Windows-accessible directory
+    - Mount drive as case-insensitive in `/etc/fstab` or `/etc/wsl.conf`
+
+    **For Linux binaries:**
+    ```bash
+    bash configure --build=x86_64-unknown-linux-gnu \
+      --openjdk-target=x86_64-unknown-linux-gnu
+    ```
+  </Tab>
+</Tabs>
+
+### IBM Open XL C/C++ (AIX)
+
+**Minimum version:** 17.1.1.4 (essentially clang 15)
+
+## Boot JDK Requirements
+
+Building the JDK requires a pre-existing JDK called the "boot JDK".
+
+### Version Rule
+
+<Info>
+  To build JDK major version **N**, use a boot JDK of major version **N-1**.
+</Info>
+
+- Building JDK 18 → Use JDK 17 as boot JDK
+- Building JDK 23 → Use JDK 22 as boot JDK
+
+Early in the release cycle, if version N-1 isn't released yet, use version N-2.
+
+<Note>
+  The JDK can "build itself", so an up-to-date build of the current JDK source is also acceptable.
+</Note>
+
+### Locating Boot JDK
+
+The configure script attempts to auto-detect a suitable boot JDK. If detection fails or selects the wrong JDK:
+
+```bash
+bash configure --with-boot-jdk=/path/to/jdk
+```
+
+### Getting JDK Binaries
+
+<Tabs>
+  <Tab title="Linux Package Managers">
+    **Debian/Ubuntu:**
+    ```bash
+    sudo apt-get install openjdk-21-jdk
+    ```
+
+    **Fedora/Red Hat:**
+    ```bash
+    sudo yum install java-21-openjdk-devel
+    ```
+  </Tab>
+
+  <Tab title="Download Sites">
+    - [OpenJDK Installation](https://openjdk.org/install)
+    - [Oracle JDK](https://www.oracle.com/java/technologies/downloads/)
+    - [Adoptium](https://adoptium.net/)
+  </Tab>
+</Tabs>
+
+## External Library Requirements
+
+External libraries are platform-specific. Use `--with-<LIB>=<path>` or split options `--with-<LIB>-include=<path>` and `--with-<LIB>-lib=<path>`.
+
+### FreeType
+
+Required on Unix-based platforms when referencing a system-installed library.
+
+<Tabs>
+  <Tab title="Debian/Ubuntu">
+    ```bash
+    sudo apt-get install libfreetype6-dev
+    ```
+  </Tab>
+  <Tab title="Fedora/Red Hat">
+    ```bash
+    sudo yum install freetype-devel
+    ```
+  </Tab>
+  <Tab title="Alpine Linux">
+    ```bash
+    sudo apk add freetype-dev
+    ```
+  </Tab>
+  <Tab title="macOS">
+    ```bash
+    brew install freetype
+    ```
+  </Tab>
+</Tabs>
+
+### CUPS (Common UNIX Printing System)
+
+Required on all platforms except Windows.
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install libcups2-dev
+
+# Fedora/Red Hat
+sudo yum install cups-devel
+
+# Alpine Linux
+sudo apk add cups-dev
+```
+
+### ALSA (Advanced Linux Sound Architecture)
+
+Required on Linux. Minimum version: 0.9.1
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install libasound2-dev
+
+# Fedora/Red Hat
+sudo yum install alsa-lib-devel
+
+# Alpine Linux
+sudo apk add alsa-lib-dev
+```
+
+<Note>
+  ALSA is needed even for headless JDK builds.
+</Note>
+
+### X11 Libraries
+
+Required on Linux (not needed for headless builds on other platforms).
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install libx11-dev libxext-dev libxrender-dev \
+  libxrandr-dev libxtst-dev libxt-dev
+
+# Fedora/Red Hat
+sudo yum install libXtst-devel libXt-devel libXrender-devel \
+  libXrandr-devel libXi-devel
+
+# Alpine Linux
+sudo apk add libx11-dev libxext-dev libxrender-dev \
+  libxrandr-dev libxtst-dev libxt-dev
+```
+
+### Fontconfig
+
+Required on all platforms except Windows and macOS.
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install libfontconfig-dev
+
+# Fedora/Red Hat
+sudo yum install fontconfig-devel
+
+# Alpine Linux
+sudo apk add fontconfig-dev
+```
+
+### libffi
+
+Required when building the Zero version of Hotspot.
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install libffi-dev
+
+# Fedora/Red Hat
+sudo yum install libffi-devel
+
+# Alpine Linux
+sudo apk add libffi-dev
+```
+
+## Build Tools Requirements
+
+### Autoconf
+
+**Required version:** 2.69 or later
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install autoconf
+
+# Fedora/Red Hat
+sudo yum install autoconf
+
+# Alpine Linux
+sudo apk add autoconf
+
+# macOS
+brew install autoconf
+
+# Windows (Cygwin)
+<path-to-setup>/setup-x86_64.exe -q -P autoconf
+```
+
+If configure can't locate autoconf:
+```bash
+AUTOCONF=/path/to/autoconf bash configure
+```
+
+### GNU Make
+
+**Minimum version:** 3.81  
+**Recommended version:** 4.0 or later (for better parallel building)
+
+<Warning>
+  Only GNU Make is supported. No other make flavors will work.
+</Warning>
+
+Override the detected make:
+```bash
+bash configure MAKE=/opt/gnu/make
+```
+
+### GNU Bash
+
+**Minimum version:** 3.2
+
+<Note>
+  No other shells are supported for the build system.
+</Note>
+
+### Graphviz and Pandoc (Optional)
+
+Required for building man pages and full documentation with `--enable-full-docs`.
+
+**Oracle uses:**
+- Graphviz 9.0.0
+- Pandoc 2.19.2
+
+Any recent versions should work.

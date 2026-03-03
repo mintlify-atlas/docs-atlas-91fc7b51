@@ -1,0 +1,467 @@
+---
+title: "Cryptography APIs (JCE)"
+description: "Java Cryptographic Extension providing encryption, decryption, key generation, and key agreement functionality"
+---
+
+## Overview
+
+The `javax.crypto` package provides the Java Cryptographic Extension (JCE) framework for:
+
+- **Symmetric Encryption**: AES, ChaCha20, DES algorithms
+- **Key Generation**: Secret key generation for symmetric algorithms
+- **Key Agreement**: Diffie-Hellman and ECDH key agreement
+- **Message Authentication**: MAC (Message Authentication Code) generation
+- **Key Derivation**: Password-based key derivation (PBKDF2)
+- **Key Wrapping**: Secure key transport
+
+## Core Classes
+
+### Cipher
+
+Provides the functionality of a cryptographic cipher for encryption and decryption.
+
+<CodeGroup>
+```java AES Encryption
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+import java.security.SecureRandom;
+
+public class CipherExample {
+    public static byte[] encryptAES(byte[] plaintext, SecretKey key) 
+            throws Exception {
+        // Create cipher instance with AES/GCM/NoPadding
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        
+        // Generate random IV
+        byte[] iv = new byte[12]; // 96 bits for GCM
+        SecureRandom random = new SecureRandom();
+        random.nextBytes(iv);
+        
+        // Initialize for encryption
+        GCMParameterSpec spec = new GCMParameterSpec(128, iv);
+        cipher.init(Cipher.ENCRYPT_MODE, key, spec);
+        
+        // Encrypt
+        byte[] ciphertext = cipher.doFinal(plaintext);
+        
+        // In practice, prepend IV to ciphertext for transmission
+        return ciphertext;
+    }
+}
+```
+
+```java AES Decryption
+public static byte[] decryptAES(byte[] ciphertext, SecretKey key, byte[] iv) 
+        throws Exception {
+    Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+    
+    // Initialize for decryption
+    GCMParameterSpec spec = new GCMParameterSpec(128, iv);
+    cipher.init(Cipher.DECRYPT_MODE, key, spec);
+    
+    // Decrypt and verify authentication tag
+    return cipher.doFinal(ciphertext);
+}
+```
+
+```java Stream Processing
+public static byte[] encryptLargeData(byte[] data, SecretKey key) 
+        throws Exception {
+    Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+    cipher.init(Cipher.ENCRYPT_MODE, key);
+    
+    // Process data in chunks
+    int blockSize = cipher.getBlockSize();
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    
+    for (int i = 0; i < data.length; i += blockSize) {
+        int len = Math.min(blockSize, data.length - i);
+        byte[] output = cipher.update(data, i, len);
+        if (output != null) {
+            out.write(output);
+        }
+    }
+    
+    // Finalize
+    byte[] finalBlock = cipher.doFinal();
+    if (finalBlock != null) {
+        out.write(finalBlock);
+    }
+    
+    return out.toByteArray();
+}
+```
+</CodeGroup>
+
+<ResponseField name="getInstance(String transformation)" type="static Cipher">
+  Returns a Cipher object that implements the specified transformation.
+  
+  **Transformation Format:** `algorithm/mode/padding` or just `algorithm`
+  
+  **Required transformations (all Java platforms):**
+  - `AES/CBC/NoPadding` (128)
+  - `AES/CBC/PKCS5Padding` (128)
+  - `AES/ECB/NoPadding` (128)
+  - `AES/ECB/PKCS5Padding` (128)
+  - `AES/GCM/NoPadding` (128, 256)
+  - `ChaCha20-Poly1305`
+  - `RSA/ECB/OAEPWithSHA-1AndMGF1Padding` (1024, 2048)
+  - `RSA/ECB/OAEPWithSHA-256AndMGF1Padding` (1024, 2048)
+  
+  **Throws:**
+  - `NoSuchAlgorithmException` - if transformation is null, empty, or invalid
+  - `NoSuchPaddingException` - if padding scheme is not available
+</ResponseField>
+
+<ResponseField name="init(int opmode, Key key)" type="void">
+  Initializes this cipher with a key.
+  
+  **Operation modes:**
+  - `Cipher.ENCRYPT_MODE` - Encrypt mode
+  - `Cipher.DECRYPT_MODE` - Decrypt mode
+  - `Cipher.WRAP_MODE` - Key wrapping mode
+  - `Cipher.UNWRAP_MODE` - Key unwrapping mode
+  
+  **Throws:**
+  - `InvalidKeyException` - if the key is inappropriate for initializing this cipher
+</ResponseField>
+
+<ResponseField name="update(byte[] input)" type="byte[]">
+  Continues a multiple-part encryption or decryption operation. Returns the next chunk of processed data, or null if no output is produced.
+</ResponseField>
+
+<ResponseField name="doFinal()" type="byte[]">
+  Finishes a multiple-part encryption or decryption operation. Returns the last chunk of processed data.
+  
+  **Throws:**
+  - `IllegalBlockSizeException` - if total input length is not multiple of block size (for encryption)
+  - `BadPaddingException` - if decryption detects incorrect padding
+</ResponseField>
+
+<ResponseField name="doFinal(byte[] input)" type="byte[]">
+  Encrypts or decrypts data in a single-part operation. Equivalent to calling update(input) followed by doFinal().
+</ResponseField>
+
+<ResponseField name="getIV()" type="byte[]">
+  Returns the initialization vector (IV) in a new buffer. Useful when a random IV was created.
+</ResponseField>
+
+<ResponseField name="getBlockSize()" type="int">
+  Returns the block size (in bytes). Returns 0 if this cipher is not a block cipher.
+</ResponseField>
+
+<Note>
+For AEAD modes like GCM, call `doFinal()` to verify the authentication tag. An `AEADBadTagException` will be thrown if verification fails.
+</Note>
+
+<Warning>
+**Important Security Notes:**
+- Always use authenticated encryption modes (GCM, ChaCha20-Poly1305) when possible
+- Never reuse an IV with the same key for GCM mode
+- Use a random IV for CBC mode
+- For GCM: IV should be 12 bytes (96 bits) for optimal performance
+</Warning>
+
+### KeyGenerator
+
+Provides the functionality of a secret (symmetric) key generator.
+
+<CodeGroup>
+```java Generate AES Key
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+
+public class KeyGenExample {
+    public static SecretKey generateAESKey(int keySize) throws Exception {
+        KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+        keyGen.init(keySize); // 128, 192, or 256 bits
+        return keyGen.generateKey();
+    }
+}
+```
+
+```java Generate with SecureRandom
+public static SecretKey generateKey() throws Exception {
+    KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+    
+    // Use specific SecureRandom instance
+    SecureRandom random = SecureRandom.getInstance("SHA1PRNG");
+    keyGen.init(256, random);
+    
+    return keyGen.generateKey();
+}
+```
+
+```java HMAC Key
+public static SecretKey generateHMACKey() throws Exception {
+    KeyGenerator keyGen = KeyGenerator.getInstance("HmacSHA256");
+    return keyGen.generateKey();
+}
+```
+</CodeGroup>
+
+<ResponseField name="getInstance(String algorithm)" type="static KeyGenerator">
+  Returns a KeyGenerator object that generates secret keys for the specified algorithm.
+  
+  **Required algorithms (all Java platforms):**
+  - `AES` (128, 256)
+  - `ChaCha20`
+  - `HmacSHA1`
+  - `HmacSHA256`
+  
+  **Throws:**
+  - `NoSuchAlgorithmException` - if no provider supports the algorithm
+</ResponseField>
+
+<ResponseField name="init(int keysize)" type="void">
+  Initializes this key generator for a certain keysize (in bits).
+  
+  **Throws:**
+  - `InvalidParameterException` - if keysize is wrong or not supported
+</ResponseField>
+
+<ResponseField name="init(int keysize, SecureRandom random)" type="void">
+  Initializes this key generator for a certain keysize, using a user-provided source of randomness.
+</ResponseField>
+
+<ResponseField name="generateKey()" type="SecretKey">
+  Generates a secret key.
+</ResponseField>
+
+### SecretKey
+
+Interface for secret (symmetric) keys. This interface contains no methods; it serves to group and provide type safety for secret keys.
+
+```java SecretKey Usage
+SecretKey key = keyGen.generateKey();
+
+// Get algorithm
+String algorithm = key.getAlgorithm(); // e.g., "AES"
+
+// Get encoded form
+byte[] encoded = key.getEncoded();
+
+// Get format
+String format = key.getFormat(); // typically "RAW"
+```
+
+### Mac
+
+Provides the functionality of a Message Authentication Code (MAC) algorithm.
+
+<CodeGroup>
+```java Generate HMAC
+import javax.crypto.Mac;
+import javax.crypto.SecretKey;
+
+public class MacExample {
+    public static byte[] generateHMAC(byte[] data, SecretKey key) 
+            throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(key);
+        return mac.doFinal(data);
+    }
+}
+```
+
+```java Verify HMAC
+public static boolean verifyHMAC(byte[] data, byte[] receivedMAC, 
+                                 SecretKey key) throws Exception {
+    byte[] calculatedMAC = generateHMAC(data, key);
+    return MessageDigest.isEqual(calculatedMAC, receivedMAC);
+}
+```
+</CodeGroup>
+
+<ResponseField name="getInstance(String algorithm)" type="static Mac">
+  Returns a Mac object that implements the specified MAC algorithm.
+  
+  **Common algorithms:**
+  - `HmacSHA1`
+  - `HmacSHA256`
+  - `HmacSHA384`
+  - `HmacSHA512`
+</ResponseField>
+
+<ResponseField name="init(Key key)" type="void">
+  Initializes this Mac object with the given key.
+  
+  **Throws:**
+  - `InvalidKeyException` - if the given key is inappropriate
+</ResponseField>
+
+<ResponseField name="update(byte[] input)" type="void">
+  Processes the given array of bytes.
+</ResponseField>
+
+<ResponseField name="doFinal()" type="byte[]">
+  Finishes the MAC operation and returns the MAC result. Resets the Mac object.
+</ResponseField>
+
+## Advanced Features
+
+### Password-Based Encryption
+
+<CodeGroup>
+```java PBKDF2 Key Derivation
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+import java.security.spec.KeySpec;
+
+public class PBEExample {
+    public static SecretKey deriveKey(char[] password, byte[] salt) 
+            throws Exception {
+        SecretKeyFactory factory = SecretKeyFactory.getInstance(
+            "PBKDF2WithHmacSHA256");
+        
+        KeySpec spec = new PBEKeySpec(password, salt, 65536, 256);
+        SecretKey tmp = factory.generateSecret(spec);
+        
+        return new SecretKeySpec(tmp.getEncoded(), "AES");
+    }
+}
+```
+
+```java PBE Encryption
+import javax.crypto.spec.PBEParameterSpec;
+
+public static byte[] encryptWithPassword(byte[] data, char[] password) 
+        throws Exception {
+    // Generate salt
+    byte[] salt = new byte[8];
+    SecureRandom random = new SecureRandom();
+    random.nextBytes(salt);
+    
+    // Create cipher
+    Cipher cipher = Cipher.getInstance("PBEWithHmacSHA256AndAES_128");
+    
+    // Create key from password
+    PBEKeySpec keySpec = new PBEKeySpec(password);
+    SecretKeyFactory keyFactory = SecretKeyFactory.getInstance(
+        "PBEWithHmacSHA256AndAES_128");
+    SecretKey key = keyFactory.generateSecret(keySpec);
+    
+    // Initialize cipher
+    PBEParameterSpec paramSpec = new PBEParameterSpec(salt, 65536);
+    cipher.init(Cipher.ENCRYPT_MODE, key, paramSpec);
+    
+    return cipher.doFinal(data);
+}
+```
+</CodeGroup>
+
+### Key Agreement
+
+```java Diffie-Hellman
+import javax.crypto.KeyAgreement;
+import java.security.*;
+
+public class KeyAgreementExample {
+    public static SecretKey performDH(PrivateKey privateKey, 
+                                     PublicKey publicKey) throws Exception {
+        KeyAgreement keyAgree = KeyAgreement.getInstance("DH");
+        keyAgree.init(privateKey);
+        keyAgree.doPhase(publicKey, true);
+        
+        // Generate shared secret
+        byte[] sharedSecret = keyAgree.generateSecret();
+        
+        // Derive AES key from shared secret
+        MessageDigest hash = MessageDigest.getInstance("SHA-256");
+        byte[] derivedKey = hash.digest(sharedSecret);
+        
+        return new SecretKeySpec(derivedKey, 0, 16, "AES");
+    }
+}
+```
+
+### Sealed Objects
+
+```java SealedObject
+import javax.crypto.SealedObject;
+
+public class SealedObjectExample {
+    public static SealedObject sealObject(Serializable object, Cipher cipher) 
+            throws Exception {
+        return new SealedObject(object, cipher);
+    }
+    
+    public static Object unsealObject(SealedObject sealed, Cipher cipher) 
+            throws Exception {
+        return sealed.getObject(cipher);
+    }
+}
+```
+
+## Exception Handling
+
+<Tabs>
+  <Tab title="BadPaddingException">
+    Thrown when decryption detects incorrect padding. Usually indicates:
+    - Wrong key used for decryption
+    - Corrupted ciphertext
+    - Tampering detected
+    
+    ```java
+    try {
+        byte[] plaintext = cipher.doFinal(ciphertext);
+    } catch (BadPaddingException e) {
+        // Handle decryption failure
+        System.err.println("Decryption failed - wrong key or corrupted data");
+    }
+    ```
+  </Tab>
+  <Tab title="IllegalBlockSizeException">
+    Thrown when the length of data provided is incorrect for the cipher.
+    
+    ```java
+    try {
+        cipher.doFinal(data);
+    } catch (IllegalBlockSizeException e) {
+        // Data length not multiple of block size
+        System.err.println("Invalid data length for cipher");
+    }
+    ```
+  </Tab>
+  <Tab title="InvalidKeyException">
+    Thrown when a key is inappropriate for initializing a cipher.
+    
+    ```java
+    try {
+        cipher.init(Cipher.ENCRYPT_MODE, key);
+    } catch (InvalidKeyException e) {
+        // Wrong key type or size
+        System.err.println("Invalid key for this cipher");
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+<Warning>
+**Security Recommendations:**
+
+1. **Use Authenticated Encryption**: Prefer `AES/GCM/NoPadding` or `ChaCha20-Poly1305`
+2. **Key Sizes**: Use 256-bit keys for AES when possible
+3. **IV Management**: 
+   - Generate random IVs for each encryption
+   - Never reuse IV with same key (especially for GCM)
+4. **Password-Based Encryption**: Use high iteration counts (65536+)
+5. **Key Storage**: Store keys securely using KeyStore
+</Warning>
+
+## Thread Safety
+
+Most classes in javax.crypto are **NOT** thread-safe:
+
+- `Cipher` - Not thread-safe
+- `KeyGenerator` - Not thread-safe after initialization
+- `Mac` - Not thread-safe
+
+## See Also
+
+- [java.security Package](/api/java-security) - Core security framework
+- [JGSS API](/api/jgss) - Authentication and secure communication

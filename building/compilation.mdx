@@ -1,0 +1,692 @@
+---
+title: Compilation Process
+description: Make targets, compilation process, build control, and advanced build techniques
+---
+
+Once you have a proper configuration, building the JDK is done using GNU Make. This page covers make targets, build control variables, and advanced compilation techniques.
+
+## Running Make
+
+### Basic Usage
+
+```bash
+# Build default target (same as 'make jdk')
+make
+
+# Build default target explicitly
+make default
+```
+
+<Info>
+  The default target builds a minimal set of compiled output ("exploded image") for development and testing. It's optimized for incremental development.
+</Info>
+
+### Testing the Build
+
+```bash
+# Test the newly built JDK
+$BUILD/jdk/bin/java -version
+```
+
+The exploded image at `$BUILD/jdk` is immediately runnable.
+
+<Warning>
+  Make sure to use the correct version of GNU Make (3.81+, recommended 4.0+). See GNU Make section in requirements.
+</Warning>
+
+## Common Make Targets
+
+### Primary Targets
+
+<Tabs>
+  <Tab title="jdk (default)">
+    ```bash
+    make jdk
+    ```
+    Builds the exploded JDK image for development. Output in `$BUILD/jdk`.
+  </Tab>
+
+  <Tab title="images">
+    ```bash
+    make images
+    # Same as:
+    make product-images
+    ```
+    Builds the full JDK product image. Output in `$BUILD/images/jdk`.
+  </Tab>
+
+  <Tab title="hotspot">
+    ```bash
+    make hotspot
+    
+    # Or specific JVM variant
+    make hotspot-server
+    make hotspot-client
+    ```
+    Builds all of Hotspot (but only Hotspot).
+  </Tab>
+
+  <Tab title="docs">
+    ```bash
+    make docs
+    # Same as:
+    make docs-image
+    ```
+    Builds the documentation image. Output in `$BUILD/images/docs`.
+  </Tab>
+
+  <Tab title="test-image">
+    ```bash
+    make test-image
+    ```
+    Builds the test image. Output in `$BUILD/images/test`.
+  </Tab>
+
+  <Tab title="all">
+    ```bash
+    make all
+    # Same as:
+    make all-images
+    ```
+    Builds all images: product, docs, and test.
+  </Tab>
+</Tabs>
+
+### Testing Targets
+
+```bash
+# Run tier 1 tests (basic smoke tests)
+make test-tier1
+
+# Run tier 2 tests
+make test-tier2
+
+# Run tier 3 tests
+make test-tier3
+```
+
+<Note>
+  Requires JTReg framework. Configure with `--with-jtreg=/path/to/jtreg`.
+</Note>
+
+### Utility Targets
+
+```bash
+# Build twice with newly built JDK (good for testing)
+make bootcycle-images
+
+# Remove all build results (keeps configuration)
+make clean
+
+# Remove everything including configuration
+make dist-clean
+
+# Show important make targets and variables
+make help
+```
+
+## Building Specific Modules
+
+### Module Targets
+
+All JDK source code is organized into modules (e.g., `java.base`, `jdk.jdwp.agent`).
+
+```bash
+# Build a single module and its dependencies
+make java.base
+make jdk.jdwp.agent
+
+# Build multiple modules
+make jdk.crypto.cryptoki jdk.crypto.ec jdk.crypto.mscapi
+```
+
+<Info>
+  Module dependencies are automatically built first.
+</Info>
+
+### Module Phases
+
+Each module build is divided into phases:
+
+| Phase | Description |
+|-------|-------------|
+| `gensrc` | Generate source code to compile |
+| `gendata` | Generate non-source code artifacts |
+| `copy` | Copy resource artifacts |
+| `java` | Compile Java code |
+| `launchers` | Compile native executables |
+| `libs` | Compile native libraries |
+
+### Phase-Specific Targets
+
+```bash
+# Build a specific phase (and dependencies)
+make gensrc
+make java
+make libs
+
+# Build a specific phase for a module
+make java.base-gensrc
+make java.base-java
+make jdk.jdwp.agent-libs
+```
+
+<Accordion title="Example: Building java.base gensrc phase">
+  ```bash
+  # This builds only the gensrc phase for java.base
+  # and any prerequisite phases it depends on
+  make java.base-gensrc
+  ```
+  
+  This is useful for quickly iterating on generated source code.
+</Accordion>
+
+## Cleaning Build Results
+
+### Clean Targets
+
+```bash
+# Clean everything (keep configuration)
+make clean
+
+# Clean specific output directory
+make clean-support
+make clean-images
+
+# Clean specific phase
+make clean-gensrc
+make clean-java
+make clean-libs
+
+# Clean specific module
+make clean-java.base
+make clean-jdk.compiler
+
+# Clean module + phase
+make clean-java.base-java
+make clean-hotspot-libs
+```
+
+### Complete Clean and Reconfigure
+
+```bash
+# Save current configuration
+make print-configuration > current-config.txt
+
+# Complete clean
+make dist-clean
+
+# Restore configuration and build
+bash configure $(cat current-config.txt)
+make images
+```
+
+## Make Control Variables
+
+<Warning>
+  Control variables should be used carefully. Incorrect use can lead to broken builds.
+</Warning>
+
+### General Control Variables
+
+<Accordion title="JOBS - Parallel build jobs">
+  ```bash
+  # Use 8 parallel jobs
+  make JOBS=8 images
+  
+  # Use 1 job (sequential build)
+  make JOBS=1
+  ```
+  
+  <Note>
+    Do NOT use `-j` flag directly. Use `JOBS=N` instead.
+  </Note>
+</Accordion>
+
+<Accordion title="LOG - Build logging level">
+  ```bash
+  # Show command lines
+  make LOG=cmdlines
+  
+  # Info level logging
+  make LOG=info
+  
+  # Debug level logging (very verbose)
+  make LOG=debug
+  
+  # Trace level logging (extremely verbose)
+  make LOG=trace
+  
+  # Combine log levels
+  make LOG=info,cmdlines
+  ```
+  
+  <Info>
+    Build output is always saved to `$BUILD/build.log` (current) and `build.log.old` (previous).
+  </Info>
+</Accordion>
+
+<Accordion title="CONF / CONF_NAME - Configuration selection">
+  ```bash
+  # Build specific configuration
+  make CONF=linux-x64-server-release
+  
+  # Build all matching configurations (substring)
+  make CONF=debug
+  
+  # Build all configurations
+  make CONF=
+  
+  # Build all except matching
+  make CONF=!debug
+  
+  # Exact name match only
+  make CONF_NAME=linux-x64-server-release
+  ```
+</Accordion>
+
+### Advanced Control Variables
+
+<Accordion title="SPEC - Direct spec.gmk file">
+  ```bash
+  # Build using specific spec.gmk
+  make SPEC=$BUILD/spec.gmk
+  ```
+  
+  This is what the build system uses internally.
+</Accordion>
+
+<Accordion title="CONF_CHECK - Reconfiguration control">
+  ```bash
+  # Auto-reconfigure if needed
+  make CONF_CHECK=auto
+  
+  # Skip reconfiguration check (risky)
+  make CONF_CHECK=ignore
+  ```
+</Accordion>
+
+<Accordion title="JDK_FILTER - Limit compilation scope">
+  ```bash
+  # Only recompile files in javax/crypto package
+  make java.base JDK_FILTER=javax/crypto
+  
+  # Pattern matching
+  make java.base JDK_FILTER=java/util
+  ```
+  
+  <Note>
+    This was historically used for performance but is less necessary in modern builds.
+  </Note>
+</Accordion>
+
+<Accordion title="COMPARE_BUILD - Build comparison">
+  ```bash
+  # Build twice with different options and compare
+  make COMPARE_BUILD=CONF=--enable-new-hotspot-feature:MAKE=hotspot
+  ```
+  
+  See `make/InitSupport.gmk` for details.
+</Accordion>
+
+## Fine-Grained Build Targets
+
+### Skipping Dependency Checks
+
+<Warning>
+  This can lead to broken builds if used incorrectly!
+</Warning>
+
+For rapid iterative development, you can skip dependency checking by appending `-only` to targets:
+
+```bash
+# Only build java phase of jdk.jdwp.agent (no dependency check)
+make jdk.jdwp.agent-java-only
+
+# Only build libs phase
+make hotspot-libs-only
+```
+
+**Recommended pattern:**
+
+<Steps>
+  <Step title="First build - with dependencies">
+    ```bash
+    make jdk.jdwp.agent
+    ```
+  </Step>
+  
+  <Step title="Subsequent builds - skip dependencies">
+    ```bash
+    make jdk.jdwp.agent-java-only
+    ```
+    
+    Executes in milliseconds vs. seconds.
+  </Step>
+</Steps>
+
+### Building the Right Target
+
+For best performance, build only what you need:
+
+| Need | Target | Output Location |
+|------|--------|----------------|
+| Development & testing | `make jdk` | `$BUILD/jdk` |
+| Shipping/distribution | `make images` | `$BUILD/images/jdk` |
+| Documentation | `make docs` | `$BUILD/images/docs` |
+| Running tests | `make test-image` | `$BUILD/images/test` |
+
+## Build Performance Optimization
+
+### Performance Summary
+
+At the end of a build with `LOG=info`, you get a build time summary:
+
+```bash
+make LOG=info images
+```
+
+Output:
+```
+## Build times summary:
+Phase           Duration  Percentage
+--------------------------------------  
+javac           00:03:12      25.6%
+hotspot         00:05:30      43.9%
+images          00:00:45       6.0%
+...
+Total           00:12:32     100.0%
+```
+
+### Build Performance Tips
+
+<Accordion title="Use local SSD storage">
+  - Put source code on local SSD (not network share)
+  - Put build output on local SSD
+  - Put build tools (Boot JDK, toolchain) on local disk
+  
+  Network shares can make builds **extremely slow**.
+</Accordion>
+
+<Accordion title="Disable virus checking">
+  On Windows, virus checking can significantly slow down builds.
+  
+  - Disable virus checking software during builds
+  - Or exclude the JDK source directory from on-the-fly checking
+</Accordion>
+
+<Accordion title="Enable ccache">
+  ```bash
+  # Configure with ccache
+  bash configure --enable-ccache
+  
+  # Build
+  make images
+  ```
+  
+  Can radically speed up native code recompilation.
+</Accordion>
+
+<Accordion title="Use icecc for distributed builds">
+  ```bash
+  # Configure with icecc
+  bash configure --enable-icecc
+  
+  # Build using multiple machines
+  make images
+  ```
+  
+  Requires [icecc network](https://github.com/icecc/icecream) setup.
+</Accordion>
+
+<Accordion title="Optimize resource allocation">
+  ```bash
+  # Adjust cores and memory
+  bash configure --with-num-cores=16 --with-memory-size=32768
+  
+  # Or control jobs at make time
+  make JOBS=16
+  ```
+  
+  Find the right balance for your system.
+</Accordion>
+
+<Accordion title="Build minimal targets">
+  ```bash
+  # For development (fastest)
+  make jdk
+  
+  # For testing only hotspot changes
+  make hotspot
+  
+  # Only when you need distribution images
+  make images
+  ```
+</Accordion>
+
+### Analyzing Build Performance
+
+```bash
+# Build with trace logging and single job
+make JOBS=1 LOG=trace
+
+# Check build trace
+cat $BUILD/build-trace-time.log
+```
+
+This shows exactly where build time is spent.
+
+## Incremental Builds
+
+The build system tracks dependencies and rebuilds only what's changed.
+
+### How Incremental Builds Work
+
+```bash
+# Initial build
+make images
+
+# Edit a Java file in java.base
+vim src/java.base/share/classes/java/lang/String.java
+
+# Rebuild - only affected parts rebuild
+make images
+```
+
+<Info>
+  Incremental builds are optimized for developer productivity. In most cases, only changed files and their dependents are recompiled.
+</Info>
+
+### When Incremental Builds May Fail
+
+Sometimes complex interdependencies cause incorrect incremental builds.
+
+**Solutions (in order of increasing time):**
+
+<Steps>
+  <Step title="Update repository">
+    ```bash
+    git pull origin master
+    make images
+    ```
+  </Step>
+  
+  <Step title="Clean build results">
+    ```bash
+    make clean
+    make images
+    ```
+    
+    Removes build results but keeps configuration.
+  </Step>
+  
+  <Step title="Complete clean">
+    ```bash
+    make print-configuration > current-config.txt
+    make dist-clean
+    bash configure $(cat current-config.txt)
+    make images
+    ```
+  </Step>
+  
+  <Step title="Re-clone repository">
+    ```bash
+    # Save local changes
+    git format-patch -o /tmp/patches origin/master
+    
+    # Re-clone
+    cd ..
+    mv jdk jdk.old
+    git clone https://git.openjdk.org/jdk
+    cd jdk
+    
+    # Reapply patches
+    git am /tmp/patches/*.patch
+    ```
+  </Step>
+</Steps>
+
+## Testing Builds
+
+### Running Tests
+
+```bash
+# Tier 1 tests (basic smoke tests, ~5-10 minutes)
+make test-tier1
+
+# Tier 2 tests (more comprehensive, ~30 minutes)
+make test-tier2
+
+# Tier 3 tests (extensive, hours)
+make test-tier3
+```
+
+### Test Control Variables
+
+These variables are used when running tests:
+
+```bash
+# Specify which tests to run
+make test TEST="tier1"
+
+# Control test parallelism
+make test TEST=tier1 TEST_JOBS=8
+
+# Pass options to test framework
+make test TEST=tier1 TEST_OPTS="-verbose"
+
+# Pass VM options
+make test TEST=tier1 TEST_VM_OPTS="-Xmx2g"
+```
+
+For complete testing documentation, see the Testing the JDK guide.
+
+## Cross-Compilation Builds
+
+When cross-compiling, the build process is more complex.
+
+### Build JDK
+
+Cross-compilation requires a "Build JDK" (runs on build platform, not target platform).
+
+```bash
+# The build system creates a minimal Build JDK automatically
+# Or provide a pre-built one for speed:
+bash configure --openjdk-target=aarch64-linux-gnu \
+               --with-build-jdk=/path/to/build-jdk
+```
+
+<Warning>
+  The Build JDK must **exactly** match current sources, or the build may break in subtle ways.
+</Warning>
+
+### Cross-Compilation Example
+
+```bash
+# Configure for cross-compilation
+bash configure \
+  --openjdk-target=aarch64-linux-gnu \
+  --with-sysroot=/path/to/aarch64-sysroot \
+  --with-toolchain-path=/opt/cross/bin \
+  --with-boot-jdk=/usr/lib/jvm/java-21-openjdk
+
+# Build
+make images
+
+# Output is in build/linux-aarch64-server-release/images/jdk
+# Copy to target system and test:
+# ./bin/java -version
+```
+
+## Specialized Build Modes
+
+### Bootcycle Build
+
+Builds JDK twice - second time using the just-built JDK as Boot JDK.
+
+```bash
+make bootcycle-images
+```
+
+Good for testing that the JDK can build itself.
+
+### Comparison Builds
+
+Automatically build two versions and compare them:
+
+```bash
+make COMPARE_BUILD=CONF=--enable-new-feature:MAKE=hotspot
+
+# Compare two existing builds manually
+$BUILD1/compare.sh -o $BUILD2
+```
+
+### Reproducible Builds
+
+```bash
+# Set fixed source date before configure
+export SOURCE_DATE_EPOCH=946684800
+bash configure --with-version-opt=adhoc
+make images
+
+# Build again - should be byte-for-byte identical
+make dist-clean
+bash configure --with-version-opt=adhoc
+make images
+```
+
+## Build System Utilities
+
+### Print Configuration
+
+```bash
+# Show current configure command line
+make print-configuration
+
+# Show build performance summary
+make print-configuration | grep -A 10 "performance"
+```
+
+### Doctor (Diagnostics)
+
+```bash
+# Run build diagnostics
+make doctor
+```
+
+Checks for:
+- Configure warnings
+- Left-over core files
+- Untracked files with illegal names
+- Other common build problems
+
+### Reconfigure
+
+```bash
+# Re-run configure with same arguments
+make reconfigure
+
+# Auto-reconfigure when needed
+export CONF_CHECK=auto
+make images  # Automatically reconfigures if configure changed
+```

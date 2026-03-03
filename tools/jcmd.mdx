@@ -1,0 +1,562 @@
+---
+title: jcmd - JVM Diagnostic Command Tool
+description: Send diagnostic commands to running Java Virtual Machine processes for troubleshooting and performance analysis
+---
+
+The `jcmd` tool sends diagnostic command requests to a running Java Virtual Machine (JVM). It is part of the `jdk.jcmd` module and provides a comprehensive way to interact with and diagnose running Java processes.
+
+## Basic Usage
+
+```bash
+jcmd <pid | main-class> <command> [arguments]
+jcmd -l
+```
+
+## Source Code
+
+The jcmd implementation is located at:
+- **Main class**: `src/jdk.jcmd/share/classes/sun/tools/jcmd/JCmd.java:1`
+- **Arguments**: `src/jdk.jcmd/share/classes/sun/tools/jcmd/Arguments.java:1`
+- **Process matcher**: `src/jdk.jcmd/share/classes/sun/tools/common/ProcessArgumentMatcher.java:1`
+
+## Command Syntax
+
+<Tabs>
+  <Tab title="List Processes">
+    List all running Java processes:
+    
+    ```bash
+    jcmd -l
+    # or
+    jcmd
+    ```
+    
+    Output:
+    ```
+    12345 com.example.MyApplication
+    12346 org.apache.catalina.startup.Bootstrap
+    12347 jdk.jcmd/sun.tools.jcmd.JCmd -l
+    ```
+  </Tab>
+  
+  <Tab title="Send Command">
+    Send a diagnostic command to a specific process:
+    
+    ```bash
+    # By process ID
+    jcmd 12345 VM.version
+    
+    # By main class name
+    jcmd MyApplication VM.version
+    
+    # To all Java processes (use with caution)
+    jcmd 0 VM.version
+    ```
+  </Tab>
+  
+  <Tab title="Get Help">
+    Get list of available commands:
+    
+    ```bash
+    jcmd <pid> help
+    ```
+    
+    Get help for specific command:
+    
+    ```bash
+    jcmd <pid> help VM.flags
+    ```
+  </Tab>
+</Tabs>
+
+## Options
+
+<ParamField path="-l" type="none">
+  List all running Java processes with their process IDs and main class names.
+  
+  ```bash
+  jcmd -l
+  ```
+</ParamField>
+
+<ParamField path="-h" type="none">
+  Display help message. Can also use `-?` or `--help`.
+  
+  ```bash
+  jcmd -h
+  ```
+</ParamField>
+
+<ParamField path="-f" type="file">
+  Read commands from a file and execute them on the specified process.
+  
+  ```bash
+  jcmd <pid> -f commands.txt
+  ```
+  
+  Example `commands.txt`:
+  ```
+  VM.version
+  VM.flags
+  Thread.print
+  ```
+</ParamField>
+
+<ParamField path="PerfCounter.print" type="none">
+  Display the performance counters exposed by the JVM process.
+  
+  ```bash
+  jcmd <pid> PerfCounter.print
+  ```
+</ParamField>
+
+## Common Diagnostic Commands
+
+### VM Information
+
+<Tabs>
+  <Tab title="VM.version">
+    Display JVM version information:
+    
+    ```bash
+    jcmd <pid> VM.version
+    ```
+    
+    Example output:
+    ```
+    OpenJDK 64-Bit Server VM version 21.0.1+12
+    JDK 21.0.1
+    ```
+  </Tab>
+  
+  <Tab title="VM.flags">
+    Print all VM flags (both default and modified):
+    
+    ```bash
+    # All flags
+    jcmd <pid> VM.flags
+    
+    # Only non-default flags
+    jcmd <pid> VM.flags -all
+    ```
+  </Tab>
+  
+  <Tab title="VM.system_properties">
+    Print all system properties:
+    
+    ```bash
+    jcmd <pid> VM.system_properties
+    ```
+  </Tab>
+  
+  <Tab title="VM.command_line">
+    Print the command line used to start the JVM:
+    
+    ```bash
+    jcmd <pid> VM.command_line
+    ```
+  </Tab>
+  
+  <Tab title="VM.uptime">
+    Print VM uptime:
+    
+    ```bash
+    jcmd <pid> VM.uptime
+    ```
+    
+    Example output:
+    ```
+    12345:
+    127.456 s
+    ```
+  </Tab>
+</Tabs>
+
+### Thread Diagnostics
+
+<Tabs>
+  <Tab title="Thread.print">
+    Print all thread stack traces:
+    
+    ```bash
+    jcmd <pid> Thread.print
+    
+    # With lock information
+    jcmd <pid> Thread.print -l
+    ```
+  </Tab>
+  
+  <Tab title="Thread.dump_to_file">
+    Dump thread information to a file:
+    
+    ```bash
+    jcmd <pid> Thread.dump_to_file /tmp/thread-dump.txt
+    ```
+  </Tab>
+</Tabs>
+
+### Heap and GC Diagnostics
+
+<Tabs>
+  <Tab title="GC.heap_info">
+    Display heap information:
+    
+    ```bash
+    jcmd <pid> GC.heap_info
+    ```
+  </Tab>
+  
+  <Tab title="GC.class_histogram">
+    Display histogram of Java object heap:
+    
+    ```bash
+    # Live objects only
+    jcmd <pid> GC.class_histogram
+    
+    # All objects
+    jcmd <pid> GC.class_histogram -all
+    ```
+  </Tab>
+  
+  <Tab title="GC.heap_dump">
+    Generate a heap dump:
+    
+    ```bash
+    jcmd <pid> GC.heap_dump /tmp/heap-dump.hprof
+    
+    # Live objects only
+    jcmd <pid> GC.heap_dump -live /tmp/heap-dump-live.hprof
+    ```
+  </Tab>
+  
+  <Tab title="GC.run">
+    Request garbage collection:
+    
+    ```bash
+    jcmd <pid> GC.run
+    ```
+  </Tab>
+  
+  <Tab title="GC.finalizer_info">
+    Display information about objects awaiting finalization:
+    
+    ```bash
+    jcmd <pid> GC.finalizer_info
+    ```
+  </Tab>
+</Tabs>
+
+### Class and Classloader Information
+
+<Tabs>
+  <Tab title="VM.class_hierarchy">
+    Display class hierarchy:
+    
+    ```bash
+    # All classes
+    jcmd <pid> VM.class_hierarchy
+    
+    # Specific class and subclasses
+    jcmd <pid> VM.class_hierarchy -s java.lang.Thread
+    ```
+  </Tab>
+  
+  <Tab title="VM.classloader_stats">
+    Display classloader statistics:
+    
+    ```bash
+    jcmd <pid> VM.classloader_stats
+    ```
+  </Tab>
+  
+  <Tab title="VM.classloaders">
+    Print all classloaders:
+    
+    ```bash
+    jcmd <pid> VM.classloaders
+    ```
+  </Tab>
+</Tabs>
+
+### Performance and Profiling
+
+<Tabs>
+  <Tab title="Compiler.codecache">
+    Display code cache information:
+    
+    ```bash
+    jcmd <pid> Compiler.codecache
+    ```
+  </Tab>
+  
+  <Tab title="Compiler.codelist">
+    Display compiled methods:
+    
+    ```bash
+    jcmd <pid> Compiler.codelist
+    ```
+  </Tab>
+  
+  <Tab title="JFR Commands">
+    Java Flight Recorder commands:
+    
+    ```bash
+    # Start recording
+    jcmd <pid> JFR.start name=MyRecording duration=60s filename=/tmp/recording.jfr
+    
+    # Check recording status
+    jcmd <pid> JFR.check
+    
+    # Dump recording
+    jcmd <pid> JFR.dump name=MyRecording filename=/tmp/dump.jfr
+    
+    # Stop recording
+    jcmd <pid> JFR.stop name=MyRecording
+    ```
+  </Tab>
+</Tabs>
+
+### Native Memory Tracking
+
+<Note>
+Native Memory Tracking must be enabled at JVM startup with `-XX:NativeMemoryTracking=summary` or `-XX:NativeMemoryTracking=detail`.
+</Note>
+
+<Tabs>
+  <Tab title="VM.native_memory">
+    Display native memory tracking information:
+    
+    ```bash
+    # Summary
+    jcmd <pid> VM.native_memory summary
+    
+    # Detailed
+    jcmd <pid> VM.native_memory detail
+    
+    # Baseline for comparison
+    jcmd <pid> VM.native_memory baseline
+    
+    # Compare with baseline
+    jcmd <pid> VM.native_memory summary.diff
+    ```
+  </Tab>
+</Tabs>
+
+## Usage Examples
+
+### Basic Diagnostics Workflow
+
+```bash
+# 1. List all Java processes
+jcmd -l
+
+# 2. Get available commands for a process
+jcmd 12345 help
+
+# 3. Check VM info
+jcmd 12345 VM.version
+jcmd 12345 VM.flags
+jcmd 12345 VM.uptime
+
+# 4. Check system properties
+jcmd 12345 VM.system_properties | grep java.home
+```
+
+### Thread Analysis
+
+```bash
+# Get thread dump
+jcmd 12345 Thread.print > thread-dump.txt
+
+# Get thread dump with lock info
+jcmd 12345 Thread.print -l > thread-dump-locks.txt
+
+# Continuous monitoring (every 5 seconds, 10 times)
+for i in {1..10}; do
+  echo "=== Dump $i ==="
+  jcmd 12345 Thread.print
+  sleep 5
+done
+```
+
+### Memory Analysis
+
+```bash
+# Check heap information
+jcmd 12345 GC.heap_info
+
+# Get class histogram (top memory consumers)
+jcmd 12345 GC.class_histogram | head -20
+
+# Generate heap dump for analysis
+jcmd 12345 GC.heap_dump /tmp/heap-$(date +%Y%m%d-%H%M%S).hprof
+
+# Check native memory (if NMT enabled)
+jcmd 12345 VM.native_memory summary
+```
+
+### Performance Monitoring
+
+```bash
+# Start JFR recording for 60 seconds
+jcmd 12345 JFR.start name=perf duration=60s filename=/tmp/perf.jfr
+
+# Monitor GC activity
+jcmd 12345 GC.heap_info
+jcmd 12345 GC.run
+jcmd 12345 GC.heap_info
+
+# Check compiler activity
+jcmd 12345 Compiler.codecache
+```
+
+### Batch Commands from File
+
+```bash
+# Create commands file
+cat > diagnostic-commands.txt << 'EOF'
+VM.version
+VM.uptime
+GC.heap_info
+Thread.print
+EOF
+
+# Execute all commands
+jcmd 12345 -f diagnostic-commands.txt > diagnostics.log
+```
+
+### Emergency Diagnostics
+
+```bash
+#!/bin/bash
+# Quick diagnostic script for troubled application
+
+PID=$1
+OUTDIR="diagnostics-$(date +%Y%m%d-%H%M%S)"
+mkdir -p $OUTDIR
+
+echo "Gathering diagnostics for PID $PID..."
+
+jcmd $PID VM.version > $OUTDIR/vm-version.txt
+jcmd $PID VM.flags > $OUTDIR/vm-flags.txt
+jcmd $PID VM.system_properties > $OUTDIR/system-properties.txt
+jcmd $PID Thread.print -l > $OUTDIR/thread-dump.txt
+jcmd $PID GC.heap_info > $OUTDIR/heap-info.txt
+jcmd $PID GC.class_histogram > $OUTDIR/class-histogram.txt
+jcmd $PID VM.native_memory summary > $OUTDIR/native-memory.txt 2>/dev/null
+jcmd $PID PerfCounter.print > $OUTDIR/perf-counters.txt
+
+echo "Diagnostics saved to $OUTDIR/"
+```
+
+## Process Selection
+
+The process identifier can be:
+
+<Tabs>
+  <Tab title="By PID">
+    Exact process ID:
+    
+    ```bash
+    jcmd 12345 VM.version
+    ```
+  </Tab>
+  
+  <Tab title="By Main Class">
+    Full or partial main class name:
+    
+    ```bash
+    # Full class name
+    jcmd com.example.MyApplication VM.version
+    
+    # Partial match
+    jcmd MyApplication VM.version
+    ```
+  </Tab>
+  
+  <Tab title="All Processes">
+    Send command to all Java processes (use PID 0):
+    
+    ```bash
+    jcmd 0 VM.version
+    ```
+    
+    <Note>
+    Use with caution - this affects all running Java processes!
+    </Note>
+  </Tab>
+</Tabs>
+
+## Related Tools in jdk.jcmd Module
+
+The jdk.jcmd module also includes other diagnostic tools:
+
+- **jinfo** - `src/jdk.jcmd/share/classes/sun/tools/jinfo/JInfo.java:1` - Display Java configuration information
+- **jmap** - `src/jdk.jcmd/share/classes/sun/tools/jmap/JMap.java:1` - Memory map for Java processes
+- **jps** - `src/jdk.jcmd/share/classes/sun/tools/jps/Jps.java:1` - List instrumented JVMs
+- **jstack** - `src/jdk.jcmd/share/classes/sun/tools/jstack/JStack.java:1` - Print Java stack traces
+- **jstat** - `src/jdk.jcmd/share/classes/sun/tools/jstat/` - JVM statistics monitoring tool
+
+<Info>
+jcmd is the recommended tool for diagnostics as it provides the most comprehensive set of commands and is actively maintained. Many functions of the older tools (jinfo, jmap, jstack) can be performed using jcmd.
+</Info>
+
+## Implementation Details
+
+The jcmd tool works by:
+
+1. **Process Discovery**: Uses the Attach API to find running JVMs
+2. **Command Transmission**: Attaches to the target JVM via `VirtualMachine.attach()`
+3. **Command Execution**: Sends diagnostic commands through `HotSpotVirtualMachine.executeJCmd()`
+4. **Response Handling**: Receives and displays output from the JVM
+
+Source: `src/jdk.jcmd/share/classes/sun/tools/jcmd/JCmd.java:110-131`
+
+## Exit Codes
+
+- `0`: Command executed successfully
+- `1`: Error occurred during execution
+
+## Troubleshooting
+
+<Tabs>
+  <Tab title="Permission Denied">
+    If you get permission errors:
+    
+    ```bash
+    # Run as the same user as the target JVM
+    sudo -u appuser jcmd <pid> <command>
+    ```
+  </Tab>
+  
+  <Tab title="Process Not Found">
+    If jcmd can't find the process:
+    
+    ```bash
+    # Verify process is running
+    jcmd -l
+    ps aux | grep java
+    
+    # Check if Attach API is available
+    jps -v
+    ```
+  </Tab>
+  
+  <Tab title="Command Not Recognized">
+    If a command is not recognized:
+    
+    ```bash
+    # List all available commands
+    jcmd <pid> help
+    
+    # Some commands require specific JVM flags
+    # For example, NMT requires -XX:NativeMemoryTracking
+    ```
+  </Tab>
+</Tabs>
+
+## See Also
+
+- [Java Flight Recorder](https://docs.oracle.com/javacomponents/jmc-5-4/jfr-runtime-guide/about.htm) - Advanced profiling
+- [VisualVM](https://visualvm.github.io/) - Visual monitoring tool
+- [Heap dump analysis](https://eclipse.dev/mat/) - Memory analyzer

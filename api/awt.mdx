@@ -1,0 +1,549 @@
+---
+title: "AWT (Abstract Window Toolkit) API"
+description: "Low-level windowing toolkit providing graphics, events, and native GUI components for Java applications"
+---
+
+## Overview
+
+The Abstract Window Toolkit (AWT) is the foundational windowing toolkit for Java desktop applications. Located in the `java.awt` package, AWT provides the basic building blocks for creating graphical user interfaces, including:
+
+- Native platform components (windows, buttons, text fields)
+- Graphics rendering and 2D drawing capabilities
+- Event handling infrastructure
+- Layout management for component positioning
+- Color, font, and image support
+
+## Core Classes
+
+### Component Hierarchy
+
+AWT follows a hierarchical component model:
+
+```
+java.lang.Object
+  └── java.awt.Component
+        ├── java.awt.Container
+        │     ├── java.awt.Window
+        │     │     ├── java.awt.Frame
+        │     │     └── java.awt.Dialog
+        │     └── java.awt.Panel
+        ├── java.awt.Button
+        ├── java.awt.Label
+        ├── java.awt.TextField
+        └── java.awt.Canvas
+```
+
+<Tabs>
+  <Tab title="Component">
+    ### java.awt.Component
+
+    Base class for all AWT visual components. Provides fundamental capabilities for rendering, event handling, and component lifecycle.
+
+    **Key Methods:**
+
+    <ResponseField name="paint(Graphics g)" type="void">
+      Paints the component. Override to provide custom rendering.
+    </ResponseField>
+
+    <ResponseField name="setSize(int width, int height)" type="void">
+      Sets the size of the component in pixels.
+    </ResponseField>
+
+    <ResponseField name="setVisible(boolean visible)" type="void">
+      Shows or hides the component.
+    </ResponseField>
+
+    <ResponseField name="addComponentListener(ComponentListener l)" type="void">
+      Registers a listener for component events (moved, resized, shown, hidden).
+    </ResponseField>
+
+    ```java
+    // Custom component example
+    class CustomComponent extends Component {
+        @Override
+        public void paint(Graphics g) {
+            g.setColor(Color.BLUE);
+            g.fillRect(0, 0, getWidth(), getHeight());
+            g.setColor(Color.WHITE);
+            g.drawString("Custom Component", 10, 20);
+        }
+        
+        @Override
+        public Dimension getPreferredSize() {
+            return new Dimension(200, 100);
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Container">
+    ### java.awt.Container
+
+    Generic AWT container that can contain other components. Manages component layout and provides methods for adding/removing child components.
+
+    **Class Signature:**
+    ```java
+    public class Container extends Component {
+        // Container implementation
+    }
+    ```
+
+    **Key Methods:**
+
+    <ResponseField name="add(Component comp)" type="Component">
+      Appends a component to the end of this container.
+    </ResponseField>
+
+    <ResponseField name="remove(Component comp)" type="void">
+      Removes the specified component from this container.
+    </ResponseField>
+
+    <ResponseField name="setLayout(LayoutManager mgr)" type="void">
+      Sets the layout manager for this container.
+    </ResponseField>
+
+    <ResponseField name="getComponents()" type="Component[]">
+      Returns an array of all components in this container.
+    </ResponseField>
+
+    ```java
+    Container container = new Container();
+    container.setLayout(new FlowLayout());
+    container.add(new Button("Click Me"));
+    container.add(new Label("Hello World"));
+    ```
+  </Tab>
+  
+  <Tab title="Frame">
+    ### java.awt.Frame
+
+    Top-level window with a title and border. The main window class for AWT applications.
+
+    **Class Signature:**
+    ```java
+    public class Frame extends Window implements MenuContainer {
+        // Frame implementation from java.awt.Frame:48-100
+    }
+    ```
+
+    **From source (java.awt.Frame:48-62):**
+    > A Frame is a top-level window with a title and a border. The size of the frame includes any area designated for the border. The dimensions of the border area may be obtained using the getInsets method. The default layout for a frame is BorderLayout.
+
+    **Key Constructors:**
+
+    ```java
+    Frame()  // Creates an untitled frame
+    Frame(String title)  // Creates a frame with specified title
+    Frame(GraphicsConfiguration gc)  // For multi-screen environments
+    ```
+
+    **Common Methods:**
+
+    <ResponseField name="setTitle(String title)" type="void">
+      Sets the title displayed in the frame's title bar.
+    </ResponseField>
+
+    <ResponseField name="setMenuBar(MenuBar mb)" type="void">
+      Sets the menu bar for this frame.
+    </ResponseField>
+
+    <ResponseField name="setResizable(boolean resizable)" type="void">
+      Determines whether the frame can be resized by the user.
+    </ResponseField>
+
+    ```java
+    Frame frame = new Frame("My Application");
+    frame.setSize(400, 300);
+    frame.setLayout(new BorderLayout());
+    frame.add(new Label("Content Area"), BorderLayout.CENTER);
+    frame.setVisible(true);
+    ```
+  </Tab>
+</Tabs>
+
+## Graphics and Rendering
+
+### Graphics2D API
+
+The Graphics2D class extends Graphics to provide sophisticated control over geometry, coordinate transformations, color management, and text layout.
+
+**From source (java.awt.Graphics2D:42-46):**
+> This Graphics2D class extends the Graphics class to provide more sophisticated control over geometry, coordinate transformations, color management, and text layout. This is the fundamental class for rendering 2-dimensional shapes, text and images on the Java platform.
+
+<Tabs>
+  <Tab title="Basic Drawing">
+    ```java
+    public class DrawingPanel extends Panel {
+        @Override
+        public void paint(Graphics g) {
+            Graphics2D g2d = (Graphics2D) g;
+            
+            // Enable anti-aliasing
+            g2d.setRenderingHint(
+                RenderingHints.KEY_ANTIALIASING,
+                RenderingHints.VALUE_ANTIALIAS_ON
+            );
+            
+            // Draw shapes
+            g2d.setColor(Color.RED);
+            g2d.fillRect(10, 10, 100, 50);
+            
+            g2d.setColor(Color.BLUE);
+            g2d.drawOval(120, 10, 100, 100);
+            
+            // Draw text
+            g2d.setColor(Color.BLACK);
+            g2d.setFont(new Font("Arial", Font.BOLD, 16));
+            g2d.drawString("Graphics2D Example", 10, 140);
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Transformations">
+    ```java
+    public void paint(Graphics g) {
+        Graphics2D g2d = (Graphics2D) g;
+        
+        // Save original transform
+        AffineTransform original = g2d.getTransform();
+        
+        // Rotate 45 degrees
+        g2d.rotate(Math.toRadians(45), 100, 100);
+        g2d.fillRect(50, 50, 100, 100);
+        
+        // Restore original transform
+        g2d.setTransform(original);
+        
+        // Scale and translate
+        g2d.translate(200, 0);
+        g2d.scale(1.5, 1.5);
+        g2d.fillOval(0, 0, 50, 50);
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Advanced">
+    ```java
+    public void paint(Graphics g) {
+        Graphics2D g2d = (Graphics2D) g;
+        
+        // Gradient fill
+        GradientPaint gradient = new GradientPaint(
+            0, 0, Color.RED,
+            100, 100, Color.YELLOW
+        );
+        g2d.setPaint(gradient);
+        g2d.fillRect(10, 10, 200, 100);
+        
+        // Custom stroke
+        BasicStroke stroke = new BasicStroke(
+            5.0f,  // width
+            BasicStroke.CAP_ROUND,
+            BasicStroke.JOIN_ROUND,
+            10.0f,
+            new float[]{10.0f, 5.0f},  // dash pattern
+            0.0f
+        );
+        g2d.setStroke(stroke);
+        g2d.setColor(Color.BLACK);
+        g2d.drawLine(10, 150, 210, 150);
+        
+        // Transparency
+        g2d.setComposite(
+            AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.5f)
+        );
+        g2d.setColor(Color.BLUE);
+        g2d.fillOval(150, 10, 100, 100);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Event Handling
+
+AWT uses a delegation event model where event listeners are registered with components.
+
+### Event Listeners
+
+<Tabs>
+  <Tab title="ActionListener">
+    **From source (java.awt.event.ActionListener:30-51):**
+    > The listener interface for receiving action events. The class that is interested in processing an action event implements this interface, and the object created with that class is registered with a component, using the component's addActionListener method.
+
+    ```java
+    import java.awt.*;
+    import java.awt.event.*;
+
+    public class ActionExample {
+        public static void main(String[] args) {
+            Frame frame = new Frame("Action Listener Example");
+            Button button = new Button("Click Me");
+            
+            // Add action listener
+            button.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    System.out.println("Button clicked!");
+                }
+            });
+            
+            // Lambda syntax (Java 8+)
+            button.addActionListener(e -> 
+                System.out.println("Button clicked!")
+            );
+            
+            frame.add(button);
+            frame.setSize(300, 200);
+            frame.setVisible(true);
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="MouseListener">
+    ```java
+    import java.awt.*;
+    import java.awt.event.*;
+
+    public class MouseExample extends Frame {
+        public MouseExample() {
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    System.out.println("Mouse pressed at: " + 
+                        e.getX() + ", " + e.getY());
+                }
+                
+                @Override
+                public void mouseReleased(MouseEvent e) {
+                    System.out.println("Mouse released");
+                }
+                
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    setCursor(Cursor.getPredefinedCursor(
+                        Cursor.HAND_CURSOR));
+                }
+                
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    setCursor(Cursor.getDefaultCursor());
+                }
+            });
+            
+            setSize(400, 300);
+            setVisible(true);
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="KeyListener">
+    ```java
+    import java.awt.*;
+    import java.awt.event.*;
+
+    public class KeyExample extends Frame {
+        private TextField textField;
+        
+        public KeyExample() {
+            textField = new TextField(20);
+            
+            textField.addKeyListener(new KeyAdapter() {
+                @Override
+                public void keyTyped(KeyEvent e) {
+                    System.out.println("Key typed: " + e.getKeyChar());
+                }
+                
+                @Override
+                public void keyPressed(KeyEvent e) {
+                    int keyCode = e.getKeyCode();
+                    if (keyCode == KeyEvent.VK_ENTER) {
+                        System.out.println("Enter pressed");
+                    } else if (keyCode == KeyEvent.VK_ESCAPE) {
+                        System.out.println("Escape pressed");
+                    }
+                }
+            });
+            
+            add(textField);
+            pack();
+            setVisible(true);
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Layout Managers
+
+Layout managers control the positioning and sizing of components within containers.
+
+### BorderLayout
+
+**From source (java.awt.BorderLayout:31-43):**
+> A border layout lays out a container, arranging and resizing its components to fit in five regions: north, south, east, west, and center. Each region may contain no more than one component.
+
+```java
+Frame frame = new Frame("BorderLayout Example");
+frame.setLayout(new BorderLayout());
+
+frame.add(new Button("North"), BorderLayout.NORTH);
+frame.add(new Button("South"), BorderLayout.SOUTH);
+frame.add(new Button("East"), BorderLayout.EAST);
+frame.add(new Button("West"), BorderLayout.WEST);
+frame.add(new TextArea("Center"), BorderLayout.CENTER);
+
+frame.setSize(400, 300);
+frame.setVisible(true);
+```
+
+### FlowLayout
+
+```java
+Panel panel = new Panel();
+panel.setLayout(new FlowLayout(FlowLayout.LEFT, 10, 10));
+
+panel.add(new Button("Button 1"));
+panel.add(new Button("Button 2"));
+panel.add(new Button("Button 3"));
+panel.add(new Button("Button 4"));
+```
+
+### GridLayout
+
+```java
+Panel panel = new Panel();
+panel.setLayout(new GridLayout(3, 2, 5, 5));  // 3 rows, 2 cols
+
+for (int i = 1; i <= 6; i++) {
+    panel.add(new Button("Button " + i));
+}
+```
+
+### GridBagLayout
+
+Most flexible but complex layout manager:
+
+```java
+Panel panel = new Panel();
+GridBagLayout layout = new GridBagLayout();
+panel.setLayout(layout);
+
+GridBagConstraints gbc = new GridBagConstraints();
+gbc.fill = GridBagConstraints.HORIZONTAL;
+
+gbc.gridx = 0;
+gbc.gridy = 0;
+gbc.gridwidth = 2;
+panel.add(new Label("Name:"), gbc);
+
+gbc.gridx = 2;
+gbc.gridy = 0;
+gbc.gridwidth = 3;
+gbc.weightx = 1.0;
+panel.add(new TextField(), gbc);
+```
+
+## Complete Application Example
+
+```java
+import java.awt.*;
+import java.awt.event.*;
+
+public class AWTCalculator extends Frame implements ActionListener {
+    private TextField display;
+    private String operator = "";
+    private double num1 = 0, num2 = 0;
+    
+    public AWTCalculator() {
+        setTitle("AWT Calculator");
+        setLayout(new BorderLayout());
+        
+        // Display
+        display = new TextField("0");
+        display.setEditable(false);
+        display.setFont(new Font("Arial", Font.BOLD, 20));
+        add(display, BorderLayout.NORTH);
+        
+        // Button panel
+        Panel buttonPanel = new Panel();
+        buttonPanel.setLayout(new GridLayout(4, 4, 5, 5));
+        
+        String[] buttons = {
+            "7", "8", "9", "/",
+            "4", "5", "6", "*",
+            "1", "2", "3", "-",
+            "0", "C", "=", "+"
+        };
+        
+        for (String label : buttons) {
+            Button button = new Button(label);
+            button.setFont(new Font("Arial", Font.PLAIN, 18));
+            button.addActionListener(this);
+            buttonPanel.add(button);
+        }
+        
+        add(buttonPanel, BorderLayout.CENTER);
+        
+        // Window listener for close
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                System.exit(0);
+            }
+        });
+        
+        setSize(300, 400);
+        setVisible(true);
+    }
+    
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        String command = e.getActionCommand();
+        
+        if (command.matches("[0-9]")) {
+            String current = display.getText();
+            if (current.equals("0")) {
+                display.setText(command);
+            } else {
+                display.setText(current + command);
+            }
+        } else if (command.equals("C")) {
+            display.setText("0");
+            num1 = num2 = 0;
+            operator = "";
+        } else if (command.equals("=")) {
+            num2 = Double.parseDouble(display.getText());
+            double result = calculate(num1, num2, operator);
+            display.setText(String.valueOf(result));
+            operator = "";
+        } else {
+            num1 = Double.parseDouble(display.getText());
+            operator = command;
+            display.setText("0");
+        }
+    }
+    
+    private double calculate(double n1, double n2, String op) {
+        switch (op) {
+            case "+": return n1 + n2;
+            case "-": return n1 - n2;
+            case "*": return n1 * n2;
+            case "/": return n2 != 0 ? n1 / n2 : 0;
+            default: return n2;
+        }
+    }
+    
+    public static void main(String[] args) {
+        new AWTCalculator();
+    }
+}
+```
+
+## See Also
+
+- [Swing API Reference](/api/swing) - Modern lightweight GUI framework
+- [java.desktop Module](/api/java-desktop) - Complete desktop API module
+- [Java 2D Graphics Tutorial](https://docs.oracle.com/javase/tutorial/2d/)

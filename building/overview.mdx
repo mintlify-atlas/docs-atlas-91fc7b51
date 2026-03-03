@@ -1,0 +1,193 @@
+---
+title: Build System Overview
+description: Introduction to the OpenJDK build system, architecture, and quick start guide
+---
+
+The JDK is a complex software project that requires a certain amount of technical expertise, a fair number of dependencies on external software, and reasonably powerful hardware.
+
+## Quick Start (TL;DR)
+
+If you're eager to try building the JDK, these simple steps work most of the time:
+
+<Steps>
+  <Step title="Get the source code">
+    Clone the main-line JDK repository:
+    ```bash
+    git clone https://git.openjdk.org/jdk
+    ```
+  </Step>
+
+  <Step title="Run configure">
+    ```bash
+    bash configure
+    ```
+    If `configure` fails due to missing dependencies (toolchain, build tools, external libraries, or boot JDK), it will usually print a suggestion on how to resolve the issue on your platform.
+  </Step>
+
+  <Step title="Run make">
+    ```bash
+    make images
+    ```
+  </Step>
+
+  <Step title="Verify the build">
+    ```bash
+    ./build/*/images/jdk/bin/java -version
+    ```
+  </Step>
+
+  <Step title="Run basic tests">
+    ```bash
+    make test-tier1
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  If any of these steps fail, refer to the detailed requirements and troubleshooting sections in this documentation.
+</Note>
+
+## Getting the Source Code
+
+### Available Repositories
+
+Make sure you are getting the correct version. Commonly used repositories include:
+
+- **JDK Project** (main-line currently in development): https://git.openjdk.org/jdk
+- **JDK Updates Project** (one repository per update release):
+  - JDK 17 updates: https://git.openjdk.org/jdk17u
+  - Other update versions follow the same pattern
+
+<Info>
+  If you want to build an older version (e.g., JDK 17), use the Updates repository (e.g., `jdk17u`) which contains incremental updates, rather than the frozen release repository (`jdk17`).
+</Info>
+
+### Special Considerations
+
+For a smooth building experience, follow these rules:
+
+<Accordion title="Path and location requirements">
+  - **No spaces in path**: Do not check out source code in a path containing spaces. The build will likely fail.
+  - **Avoid long paths**: Do not use very long paths or deeply nested directories. You may hit OS limitations.
+  - **Use local disk**: Put source code on a local disk, not a network share. Use an SSD if possible for best performance.
+  - **UTF-8 support**: On Unix systems, ensure `C.UTF-8` or `en_US.UTF-8` locale is available.
+</Accordion>
+
+<Accordion title="Windows-specific requirements">
+  - **Short names**: Ensure all relevant paths have short names enabled. Check with `fsutil 8dot3name query`.
+  - **Cygwin permissions**: If using Cygwin, create directories using `mkdir` in bash shell, not Windows Explorer.
+  - **Avoid Cygwin home**: Do not put the JDK clone in your Cygwin home directory, especially if it contains spaces or mixed case letters.
+  - **Git client**: Choose between Cygwin git (better path handling) or Git for Windows (better Skara support). If using Git for Windows, set `core.autocrlf` to `false`.
+</Accordion>
+
+## Build System Architecture
+
+### Configuration System
+
+The build system uses **Autoconf** to detect your system and create a configuration. A configuration consists of:
+
+- A directory to store build output
+- Information about the platform and build machine
+- Choices that affect how the JDK is built
+
+The configuration directory is typically named like `build/linux-x64-server-release` and is referred to as `$BUILD` in the documentation.
+
+### Build Output Structure
+
+After building, the `$BUILD` directory contains:
+
+```
+build/<configuration-name>/
+├── buildtools/      # Tools compiled for the build platform
+├── configure-support/
+├── hotspot/         # Intermediate files for hotspot
+├── images/          # Output of *-image make targets
+│   ├── jdk/        # JDK image from 'make images'
+│   ├── docs/       # Documentation from 'make docs-image'
+│   └── test/       # Test image from 'make test-image'
+├── jdk/            # Exploded image (runnable after 'make jdk')
+├── make-support/
+├── support/        # Intermediate build files
+│   ├── gensrc/    # Generated source code
+│   └── modules_*/ # Per-module file hierarchy
+├── test-results/
+└── test-support/
+```
+
+<Info>
+  The **exploded image** in `$BUILD/jdk` can be used immediately after running `make jdk`. Launch it with `$BUILD/jdk/bin/java`.
+</Info>
+
+## Build Phases
+
+The build process is divided into phases:
+
+1. **Configure phase**: Detect system, locate tools, set options
+2. **Build phase**: Compile native code and Java code
+3. **Image creation**: Package the build into distributable images
+
+Each module can have these sub-phases:
+
+- `gensrc` - Generate source code to compile
+- `gendata` - Generate non-source code artifacts
+- `copy` - Copy resource artifacts
+- `java` - Compile Java code
+- `launchers` - Compile native executables
+- `libs` - Compile native libraries
+
+## Supported Platforms
+
+The mainline JDK project supports:
+
+| Operating System | Supported Toolchain |
+|-----------------|---------------------|
+| Linux           | gcc, clang          |
+| macOS           | Apple Xcode (clang) |
+| Windows         | Microsoft Visual Studio |
+| AIX             | IBM Open XL C/C++   |
+
+<Warning>
+  The 32-bit x86 port is deprecated and may be removed in a future release.
+</Warning>
+
+### Oracle Build Configurations
+
+Oracle uses these OS versions for daily JDK builds:
+
+| Operating System | Version |
+|-----------------|----------|
+| Linux/x64       | Oracle Enterprise Linux 6.4 / 8.x |
+| Linux/aarch64   | Oracle Enterprise Linux 7.6 / 8.x |
+| macOS           | macOS 14.x |
+| Windows         | Windows Server 2016 |
+
+### Toolchain Versions
+
+Oracle currently uses these toolchain versions:
+
+| Platform | Toolchain Version |
+|----------|------------------|
+| Linux    | gcc 14.2.0 |
+| macOS    | Apple Xcode 15.4 (clang 15.0.0) |
+| Windows  | Visual Studio 2022 version 17.13.2 |
+
+<Note>
+  All compilers must support **C11** for C code and **C++14** for C++ code.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Build Requirements" icon="list-check" href="/building/requirements">
+    Learn about hardware, software, and toolchain requirements
+  </Card>
+  <Card title="Configuration" icon="gear" href="/building/configuration">
+    Explore configure script options and settings
+  </Card>
+  <Card title="Compilation" icon="hammer" href="/building/compilation">
+    Understand make targets and the build process
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/building/troubleshooting">
+    Fix common build issues and problems
+  </Card>
+</CardGroup>

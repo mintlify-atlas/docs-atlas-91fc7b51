@@ -1,0 +1,692 @@
+---
+title: Debugging Guide
+description: Techniques and tools for debugging the JVM, Java applications, and native code in OpenJDK
+---
+
+## Overview
+
+Debugging OpenJDK requires understanding both Java and native code debugging techniques. This guide covers tools and approaches for debugging the JVM itself, as well as Java applications running on it.
+
+## Build Configuration for Debugging
+
+Before debugging, configure your build for debugging:
+
+### Debug Builds
+
+<CodeGroup>
+```bash Slowdebug Build
+# Most debugging information, slowest runtime
+bash configure --with-debug-level=slowdebug
+make images
+```
+
+```bash Fastdebug Build
+# Good balance of debugging info and performance
+bash configure --with-debug-level=fastdebug
+make images
+```
+
+```bash Release with Symbols
+# Production performance, minimal debug info
+bash configure --with-debug-level=release --with-native-debug-symbols=internal
+make images
+```
+</CodeGroup>
+
+<Accordion title="Debug Level Comparison">
+  | Level | Assertions | Optimization | Debug Symbols | Use Case |
+  |-------|-----------|--------------|---------------|----------|
+  | slowdebug | Yes | None (-O0) | Full | Deep debugging |
+  | fastdebug | Yes | Some (-O2) | Full | Daily development |
+  | release | No | Full (-O3) | Optional | Performance testing |
+</Accordion>
+
+<Note>
+For most development work, **fastdebug** provides the best balance. Use **slowdebug** only when you need to debug optimized-away variables or complex issues.
+</Note>
+
+## Java-Level Debugging
+
+### Using JDB (Java Debugger)
+
+JDB is the command-line debugger included with the JDK:
+
+```bash
+# Start application in debug mode
+java -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005 MyApp
+
+# In another terminal, attach jdb
+jdb -attach 5005
+```
+
+<Steps>
+  <Step title="Set Breakpoints">
+    ```bash
+    # Break at specific method
+    stop in java.lang.String.hashCode
+    
+    # Break at line number
+    stop at MyClass:42
+    
+    # Break on exception
+    catch java.lang.NullPointerException
+    ```
+  </Step>
+
+  <Step title="Control Execution">
+    ```bash
+    run                 # Start/resume execution
+    step                # Step into
+    next                # Step over
+    step up             # Step out
+    cont                # Continue to next breakpoint
+    ```
+  </Step>
+
+  <Step title="Inspect State">
+    ```bash
+    print myVariable    # Print variable value
+    dump myObject       # Dump object state
+    locals              # List local variables
+    where               # Print stack trace
+    threads             # List all threads
+    ```
+  </Step>
+</Steps>
+
+### IDE Debugging
+
+Most IDEs provide superior debugging experiences:
+
+<CodeGroup>
+```xml IntelliJ IDEA
+<!-- Configure Remote Debug Configuration -->
+Host: localhost
+Port: 5005
+Command line args for remote JVM:
+  -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005
+
+<!-- Import OpenJDK project -->
+File → New → Project from Existing Sources
+Select jdk/ directory
+Import as Maven/Gradle project
+```
+
+```json VS Code
+// .vscode/launch.json
+{
+  "type": "java",
+  "name": "Attach to JVM",
+  "request": "attach",
+  "hostName": "localhost",
+  "port": 5005,
+  "sourcePaths": [
+    "${workspaceFolder}/src/java.base",
+    "${workspaceFolder}/src/java.desktop"
+  ]
+}
+```
+
+```xml Eclipse
+<!-- Debug Configuration -->
+Run → Debug Configurations → Remote Java Application
+Project: jdk
+Connection Type: Standard (Socket Attach)
+Host: localhost
+Port: 5005
+```
+</CodeGroup>
+
+### Useful JVM Debug Flags
+
+```bash
+# Print loaded classes
+java -verbose:class MyApp
+
+# Print JIT compilation
+java -XX:+PrintCompilation MyApp
+
+# Trace method calls
+java -XX:+TraceClassLoading -XX:+TraceClassUnloading MyApp
+
+# GC debugging
+java -Xlog:gc*=debug:file=gc.log MyApp
+
+# Print all JVM flags
+java -XX:+PrintFlagsFinal -version
+```
+
+## Native Code Debugging
+
+### Using GDB (Linux/macOS)
+
+GDB is the primary debugger for native HotSpot code:
+
+<Steps>
+  <Step title="Start GDB">
+    ```bash
+    # Debug the JVM
+    gdb --args build/linux-x64-server-fastdebug/jdk/bin/java MyApp
+    
+    # Or attach to running process
+    gdb -p <pid>
+    
+    # With core dump
+    gdb build/linux-x64/jdk/bin/java core.12345
+    ```
+  </Step>
+
+  <Step title="Set Breakpoints">
+    ```bash
+    # Break at C++ function
+    break JavaThread::run
+    
+    # Break at source location
+    break thread.cpp:1234
+    
+    # Conditional breakpoint
+    break JavaThread::run if thread_id == 5
+    
+    # Break on memory access
+    watch my_variable
+    ```
+  </Step>
+
+  <Step title="Navigate Code">
+    ```bash
+    run                 # Start program
+    continue            # Continue execution
+    next                # Step over (same level)
+    step                # Step into
+    finish              # Step out of current function
+    until <line>        # Continue until line
+    ```
+  </Step>
+
+  <Step title="Inspect State">
+    ```bash
+    # Print variables
+    print thread->_name
+    print /x 0x7fff12345678        # Print as hex
+    print *this                     # Print current object
+    
+    # Print formatted
+    p/x variable      # Hexadecimal
+    p/d variable      # Decimal
+    p/t variable      # Binary
+    p/c variable      # Character
+    
+    # Stack traces
+    backtrace         # Full stack
+    bt 10             # Top 10 frames
+    frame 3           # Switch to frame 3
+    info locals       # Local variables
+    info args         # Function arguments
+    ```
+  </Step>
+</Steps>
+
+### GDB Helper Scripts
+
+OpenJDK includes GDB helper scripts:
+
+```bash
+# Load HotSpot GDB helpers
+gdb -x src/hotspot/share/gc/z/zDebug.gdb
+
+# Or in GDB prompt
+(gdb) source src/hotspot/share/gc/z/zDebug.gdb
+
+# Custom helper for thread inspection
+(gdb) define print-java-stack
+  call JavaThread::print_stack_on($arg0)
+end
+
+# Use it
+(gdb) print-java-stack thread
+```
+
+### LLDB (macOS)
+
+LLDB is the debugger for macOS:
+
+```bash
+# Start LLDB
+lldb -- build/macosx-x64-server-fastdebug/jdk/bin/java MyApp
+
+# Common commands
+(lldb) breakpoint set --name JavaThread::run
+(lldb) breakpoint set --file thread.cpp --line 1234
+(lldb) run
+(lldb) continue
+(lldb) next
+(lldb) step
+(lldb) frame variable
+(lldb) bt
+```
+
+<Accordion title="LLDB vs GDB Command Mapping">
+  | GDB | LLDB | Description |
+  |-----|------|-------------|
+  | break | breakpoint set | Set breakpoint |
+  | run | process launch | Start program |
+  | continue | continue | Resume execution |
+  | backtrace | thread backtrace | Stack trace |
+  | print | frame variable | Print variables |
+  | info locals | frame variable | Local variables |
+</Accordion>
+
+### Visual Studio Debugger (Windows)
+
+<CodeGroup>
+```bash Attach to Process
+# Start JVM
+start build\windows-x64-server-fastdebug\jdk\bin\java.exe MyApp
+
+# In Visual Studio:
+# Debug → Attach to Process → java.exe
+# Set breakpoints in C++ source files
+```
+
+```bash Debug from IDE
+# Open Visual Studio solution
+devenv build\windows-x64-server-fastdebug\hotspot\hotspot.sln
+
+# Configure debugging:
+# Project Properties → Debugging → Command: path\to\java.exe
+# Command Arguments: MyApp
+# F5 to start debugging
+```
+</CodeGroup>
+
+## Advanced Debugging Techniques
+
+### Debugging JIT Compiled Code
+
+```bash
+# Disable JIT compilation
+java -Xint MyApp
+
+# Compile only specific methods
+java -XX:CompileCommand=compileonly,MyClass::myMethod MyApp
+
+# Print compilation details
+java -XX:+PrintCompilation -XX:+UnlockDiagnosticVMOptions -XX:+PrintInlining MyApp
+
+# Print generated assembly
+java -XX:+UnlockDiagnosticVMOptions -XX:+PrintAssembly MyApp
+
+# Disable background compilation
+java -Xbatch MyApp
+```
+
+### Debugging Garbage Collection
+
+```bash
+# Detailed GC logging
+java -Xlog:gc*=debug:file=gc.log:time,level,tags MyApp
+
+# Verify heap consistency
+java -XX:+VerifyBeforeGC -XX:+VerifyAfterGC MyApp
+
+# Trace object allocation
+java -XX:+TraceObjectAllocation MyApp
+
+# GC stress testing
+java -XX:+UnlockDiagnosticVMOptions -XX:+FullGCAtParallelMark MyApp
+```
+
+<Accordion title="Understanding GC Logs">
+  ```
+  [0.123s][info][gc] GC(0) Pause Young (Normal) 12M->3M(128M) 2.345ms
+  
+  Breaking down the log:
+  - [0.123s] - Time since JVM start
+  - [info][gc] - Log level and tag
+  - GC(0) - GC event number
+  - Pause Young - Type of collection
+  - 12M->3M(128M) - Before size -> After size (Total heap)
+  - 2.345ms - Pause time
+  ```
+</Accordion>
+
+### Memory Leak Detection
+
+<Steps>
+  <Step title="Enable Native Memory Tracking">
+    ```bash
+    java -XX:NativeMemoryTracking=detail MyApp
+    
+    # Check memory usage
+    jcmd <pid> VM.native_memory summary
+    jcmd <pid> VM.native_memory detail
+    
+    # Create baseline
+    jcmd <pid> VM.native_memory baseline
+    
+    # Check diff
+    jcmd <pid> VM.native_memory summary.diff
+    ```
+  </Step>
+
+  <Step title="Heap Dumps">
+    ```bash
+    # Generate heap dump
+    jcmd <pid> GC.heap_dump /tmp/heap.hprof
+    
+    # Or on OutOfMemoryError
+    java -XX:+HeapDumpOnOutOfMemoryError \
+         -XX:HeapDumpPath=/tmp/heap.hprof MyApp
+    
+    # Analyze with jhat
+    jhat /tmp/heap.hprof
+    # Browse to http://localhost:7000
+    ```
+  </Step>
+
+  <Step title="Valgrind (Linux)">
+    ```bash
+    # Check for memory leaks in native code
+    valgrind --leak-check=full \
+             --show-leak-kinds=all \
+             --track-origins=yes \
+             build/linux-x64/jdk/bin/java MyApp
+    ```
+  </Step>
+</Steps>
+
+### Crash Dump Analysis
+
+When the JVM crashes, it generates a crash dump (hs_err_pidXXXX.log):
+
+<Accordion title="Understanding Crash Dumps">
+  ```bash
+  # Crash dump sections:
+  # 1. Summary - Exception type, address, thread
+  # 2. Thread state - Registers, stack
+  # 3. Native frames - C/C++ stack trace
+  # 4. Java frames - Java call stack (if available)
+  # 5. VM state - Heap info, GC state, etc.
+  # 6. System info - OS, CPU, memory
+  
+  # Key things to check:
+  # - Problematic frame (near crash location)
+  # - Signal type (SIGSEGV, SIGBUS, etc.)
+  # - Thread state at crash
+  # - Recent VM operations
+  ```
+</Accordion>
+
+```bash
+# Analyze core dump with debugger
+gdb build/linux-x64/jdk/bin/java core.12345
+
+# Get stack trace
+(gdb) thread apply all bt
+
+# Check specific frames
+(gdb) frame 5
+(gdb) info locals
+
+# Print Java stack if possible
+(gdb) call JavaThread::print_stack_on(thread)
+```
+
+## Debugging Tools
+
+### jcmd - JVM Diagnostic Command
+
+```bash
+# List available commands
+jcmd <pid> help
+
+# Thread dump
+jcmd <pid> Thread.print
+
+# Class histogram
+jcmd <pid> GC.class_histogram
+
+# VM flags
+jcmd <pid> VM.flags
+jcmd <pid> VM.system_properties
+
+# Compiler statistics
+jcmd <pid> Compiler.codecache
+jcmd <pid> Compiler.codelist
+
+# Flight Recorder
+jcmd <pid> JFR.start duration=60s filename=/tmp/recording.jfr
+jcmd <pid> JFR.dump filename=/tmp/snapshot.jfr
+jcmd <pid> JFR.stop
+```
+
+### jstack - Thread Dump
+
+```bash
+# Get thread dump
+jstack <pid>
+
+# With locks
+jstack -l <pid>
+
+# Force dump (if hung)
+jstack -F <pid>
+
+# Analyzing deadlocks
+jstack <pid> | grep -A 10 "deadlock"
+```
+
+### jmap - Memory Map
+
+```bash
+# Heap summary
+jmap -heap <pid>
+
+# Heap histogram
+jmap -histo <pid>
+jmap -histo:live <pid>  # Only live objects
+
+# Dump heap
+jmap -dump:format=b,file=/tmp/heap.bin <pid>
+```
+
+### Java Flight Recorder (JFR)
+
+<CodeGroup>
+```bash Start Recording
+# Start with JVM
+java -XX:StartFlightRecording=duration=60s,filename=/tmp/recording.jfr MyApp
+
+# Or during runtime
+jcmd <pid> JFR.start name=MyRecording duration=60s
+jcmd <pid> JFR.dump name=MyRecording filename=/tmp/recording.jfr
+jcmd <pid> JFR.stop name=MyRecording
+```
+
+```bash Analyze Recording
+# With JDK Mission Control (GUI)
+jmc
+
+# Command line analysis
+jfr print /tmp/recording.jfr
+jfr summary /tmp/recording.jfr
+
+# Extract specific events
+jfr print --events jdk.GarbageCollection /tmp/recording.jfr
+```
+</CodeGroup>
+
+## Logging and Diagnostics
+
+### Unified Logging Framework
+
+The `-Xlog` option provides extensive diagnostic information:
+
+```bash
+# Basic logging syntax
+java -Xlog:<tags>*=<level>:<output>:<decorators>
+
+# Examples:
+# All GC logs to file
+java -Xlog:gc*=debug:file=gc.log MyApp
+
+# Class loading
+java -Xlog:class+load=info:stdout MyApp
+
+# Method compilation
+java -Xlog:jit+compilation=debug:file=jit.log MyApp
+
+# Everything (very verbose!)
+java -Xlog:all=debug:file=all.log MyApp
+
+# Multiple outputs
+java -Xlog:gc=debug:stdout -Xlog:gc=trace:file=gc.log MyApp
+```
+
+<Accordion title="Common Log Tags">
+  - `gc` - Garbage collection
+  - `class` - Class loading/unloading
+  - `jit`, `compilation` - JIT compilation
+  - `thread` - Thread operations
+  - `os` - Operating system interactions
+  - `vmop` - VM operations
+  - `safepoint` - Safepoint operations
+  - `exceptions` - Exception handling
+</Accordion>
+
+### Assertion and Debugging Checks
+
+```cpp
+// In HotSpot C++ code:
+
+// Runtime checks (always enabled in debug builds)
+assert(ptr != nullptr, "pointer must not be null");
+guarantee(heap->is_initialized(), "heap not initialized");
+
+// Should never reach
+ShouldNotReachHere();
+Unimplemented();
+
+// Development-only code
+#ifdef ASSERT
+  verify_object_state();
+#endif
+
+// Trace execution
+log_debug(gc)() << "Performing GC, heap size: " << heap_size;
+```
+
+## Debugging Specific Scenarios
+
+### Debugging Deadlocks
+
+```bash
+# Get thread dump with lock info
+jstack -l <pid> > threads.txt
+
+# Look for "Found one Java-level deadlock"
+grep -A 20 "deadlock" threads.txt
+
+# In GDB, examine lock holders
+(gdb) call Thread::print_all_threads()
+```
+
+### Debugging Performance Issues
+
+<Steps>
+  <Step title="Profile with JFR">
+    ```bash
+    java -XX:StartFlightRecording=settings=profile,duration=30s,filename=profile.jfr MyApp
+    # Analyze in JMC to find hotspots
+    ```
+  </Step>
+
+  <Step title="Check for Compilation Issues">
+    ```bash
+    java -XX:+PrintCompilation \
+         -XX:+UnlockDiagnosticVMOptions \
+         -XX:+LogCompilation \
+         -XX:LogFile=compilation.log MyApp
+    ```
+  </Step>
+
+  <Step title="Analyze GC Overhead">
+    ```bash
+    java -Xlog:gc*=debug:file=gc.log:time,uptimemillis,level MyApp
+    # Check pause times and frequency
+    ```
+  </Step>
+</Steps>
+
+### Debugging Native Crashes
+
+```bash
+# 1. Reproduce with debug build
+bash configure --with-debug-level=slowdebug
+make images
+
+# 2. Run under debugger
+gdb --args build/linux-x64-slowdebug/jdk/bin/java MyApp
+(gdb) run
+# When crash occurs, examine state
+(gdb) bt
+(gdb) info registers
+(gdb) frame 0
+(gdb) info locals
+
+# 3. Check for common issues
+# - Null pointer dereference
+# - Buffer overflow
+# - Use after free
+# - Stack overflow
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Use Appropriate Build">
+    - Development: fastdebug
+    - Deep debugging: slowdebug
+    - Performance testing: release
+  </Step>
+
+  <Step title="Enable Assertions">
+    Always run tests and development with assertions enabled (`-ea`).
+  </Step>
+
+  <Step title="Start Simple">
+    Begin with high-level tools (jcmd, jstack) before diving into debuggers.
+  </Step>
+
+  <Step title="Isolate the Problem">
+    Create minimal test cases that reproduce the issue reliably.
+  </Step>
+
+  <Step title="Use Logging Liberally">
+    Add diagnostic logging before resorting to interactive debugging.
+  </Step>
+</Steps>
+
+## Resources
+
+### Documentation
+
+- [Troubleshooting Guide](https://docs.oracle.com/en/java/javase/21/troubleshoot/) - Official Java troubleshooting
+- [HotSpot Internals](https://openjdk.org/groups/hotspot/) - HotSpot architecture
+- [GDB Documentation](https://sourceware.org/gdb/documentation/) - GDB manual
+
+### Tools
+
+<Accordion title="Essential Debugging Tools">
+  - **jcmd** - Diagnostic command tool (included with JDK)
+  - **jstack** - Thread dump tool
+  - **jmap** - Heap analysis tool
+  - **JFR/JMC** - Profiling and monitoring
+  - **GDB/LLDB** - Native debuggers
+  - **Valgrind** - Memory debugging (Linux)
+  - **VisualVM** - All-in-one monitoring tool
+</Accordion>
+
+<Note>
+Effective debugging often requires patience and methodical investigation. Start with the simplest tools and escalate to more complex debugging techniques only when necessary.
+</Note>

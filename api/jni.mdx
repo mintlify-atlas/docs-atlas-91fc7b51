@@ -1,0 +1,682 @@
+---
+title: Java Native Interface (JNI)
+description: Complete reference for the Java Native Interface, enabling Java code to interoperate with native applications and libraries written in C, C++, and other languages
+---
+
+The Java Native Interface (JNI) is a framework that enables Java code running in the JVM to call and be called by native applications and libraries. JNI is defined in `src/java.base/share/native/include/jni.h`.
+
+## Overview
+
+JNI allows Java code to:
+- Call native methods implemented in C/C++
+- Create, inspect, and update Java objects
+- Call Java methods from native code
+- Catch and throw exceptions
+- Load classes and obtain class information
+- Perform runtime type checking
+
+## JNI Types
+
+From `src/java.base/share/native/include/jni.h:57-146`:
+
+### Primitive Types
+
+```c
+typedef unsigned char   jboolean;
+typedef unsigned short  jchar;
+typedef short           jshort;
+typedef float           jfloat;
+typedef double          jdouble;
+typedef jint            jsize;
+```
+
+### Reference Types
+
+<Tabs>
+  <Tab title="C++ Types">
+    ```cpp
+    class _jobject {};
+    class _jclass : public _jobject {};
+    class _jthrowable : public _jobject {};
+    class _jstring : public _jobject {};
+    class _jarray : public _jobject {};
+    class _jbooleanArray : public _jarray {};
+    class _jbyteArray : public _jarray {};
+    class _jcharArray : public _jarray {};
+    class _jshortArray : public _jarray {};
+    class _jintArray : public _jarray {};
+    class _jlongArray : public _jarray {};
+    class _jfloatArray : public _jarray {};
+    class _jdoubleArray : public _jarray {};
+    class _jobjectArray : public _jarray {};
+
+    typedef _jobject *jobject;
+    typedef _jclass *jclass;
+    typedef _jthrowable *jthrowable;
+    typedef _jstring *jstring;
+    typedef _jarray *jarray;
+    // ... array types
+    ```
+  </Tab>
+
+  <Tab title="C Types">
+    ```c
+    struct _jobject;
+
+    typedef struct _jobject *jobject;
+    typedef jobject jclass;
+    typedef jobject jthrowable;
+    typedef jobject jstring;
+    typedef jobject jarray;
+    typedef jarray jbooleanArray;
+    typedef jarray jbyteArray;
+    typedef jarray jcharArray;
+    typedef jarray jshortArray;
+    typedef jarray jintArray;
+    typedef jarray jlongArray;
+    typedef jarray jfloatArray;
+    typedef jarray jdoubleArray;
+    typedef jarray jobjectArray;
+    ```
+  </Tab>
+</Tabs>
+
+### Value Union
+
+```c
+typedef union jvalue {
+    jboolean z;
+    jbyte    b;
+    jchar    c;
+    jshort   s;
+    jint     i;
+    jlong    j;
+    jfloat   f;
+    jdouble  d;
+    jobject  l;
+} jvalue;
+```
+
+### Method and Field IDs
+
+```c
+struct _jfieldID;
+typedef struct _jfieldID *jfieldID;
+
+struct _jmethodID;
+typedef struct _jmethodID *jmethodID;
+```
+
+### Object Reference Types
+
+```c
+typedef enum _jobjectType {
+    JNIInvalidRefType    = 0,
+    JNILocalRefType      = 1,
+    JNIGlobalRefType     = 2,
+    JNIWeakGlobalRefType = 3
+} jobjectRefType;
+```
+
+## Constants
+
+From `src/java.base/share/native/include/jni.h:155-175`:
+
+```c
+#define JNI_FALSE 0
+#define JNI_TRUE 1
+
+// Return values for JNI functions
+#define JNI_OK           0     // success
+#define JNI_ERR          (-1)  // unknown error
+#define JNI_EDETACHED    (-2)  // thread detached from the VM
+#define JNI_EVERSION     (-3)  // JNI version error
+#define JNI_ENOMEM       (-4)  // not enough memory
+#define JNI_EEXIST       (-5)  // VM already created
+#define JNI_EINVAL       (-6)  // invalid arguments
+
+// Array release modes
+#define JNI_COMMIT 1
+#define JNI_ABORT 2
+```
+
+## Native Method Registration
+
+### JNINativeMethod Structure
+
+From `src/java.base/share/native/include/jni.h:182-186`:
+
+```c
+typedef struct {
+    char *name;
+    char *signature;
+    void *fnPtr;
+} JNINativeMethod;
+```
+
+### Registering Native Methods
+
+```c
+jint RegisterNatives(JNIEnv *env,
+                     jclass clazz,
+                     const JNINativeMethod *methods,
+                     jint nMethods)
+
+jint UnregisterNatives(JNIEnv *env,
+                       jclass clazz)
+```
+
+### Example Registration
+
+```c
+static JNINativeMethod methods[] = {
+    {"nativeMethod", "(I)V", (void*)&Java_com_example_MyClass_nativeMethod},
+    {"nativeCalc", "(II)I", (void*)&Java_com_example_MyClass_nativeCalc}
+};
+
+JNIEXPORT jint JNICALL
+JNI_OnLoad(JavaVM *vm, void *reserved)
+{
+    JNIEnv *env;
+    if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_8) != JNI_OK) {
+        return JNI_ERR;
+    }
+    
+    jclass clazz = (*env)->FindClass(env, "com/example/MyClass");
+    (*env)->RegisterNatives(env, clazz, methods, 2);
+    
+    return JNI_VERSION_1_8;
+}
+```
+
+## JNI Environment
+
+The JNIEnv pointer provides access to all JNI functions:
+
+```c
+struct JNINativeInterface_ {
+    void *reserved0;
+    void *reserved1;
+    void *reserved2;
+    void *reserved3;
+    
+    jint (JNICALL *GetVersion)(JNIEnv *env);
+    jclass (JNICALL *DefineClass)(JNIEnv *env, const char *name, 
+                                   jobject loader, const jbyte *buf, jsize len);
+    jclass (JNICALL *FindClass)(JNIEnv *env, const char *name);
+    // ... many more function pointers
+};
+```
+
+## Class Operations
+
+### Finding Classes
+
+From `src/java.base/share/native/include/jni.h:227-228`:
+
+```c
+jclass FindClass(JNIEnv *env, const char *name)
+```
+
+**Example:**
+```c
+jclass stringClass = (*env)->FindClass(env, "java/lang/String");
+jclass intArrayClass = (*env)->FindClass(env, "[I");
+jclass objectArrayClass = (*env)->FindClass(env, "[Ljava/lang/Object;");
+```
+
+### Class Hierarchy
+
+```c
+jclass GetSuperclass(JNIEnv *env, jclass sub)
+
+jboolean IsAssignableFrom(JNIEnv *env, jclass sub, jclass sup)
+```
+
+### Class Information
+
+```c
+jclass GetObjectClass(JNIEnv *env, jobject obj)
+
+jboolean IsInstanceOf(JNIEnv *env, jobject obj, jclass clazz)
+```
+
+## Method Operations
+
+### Getting Method IDs
+
+From `src/java.base/share/native/include/jni.h:291-292`:
+
+```c
+jmethodID GetMethodID(JNIEnv *env,
+                      jclass clazz,
+                      const char *name,
+                      const char *sig)
+
+jmethodID GetStaticMethodID(JNIEnv *env,
+                            jclass clazz,
+                            const char *name,
+                            const char *sig)
+```
+
+### Calling Methods
+
+<Tabs>
+  <Tab title="Object Methods">
+    From `src/java.base/share/native/include/jni.h:294-349`:
+
+    ```c
+    jobject CallObjectMethod(JNIEnv *env, jobject obj, jmethodID methodID, ...)
+    jboolean CallBooleanMethod(JNIEnv *env, jobject obj, jmethodID methodID, ...)
+    jbyte CallByteMethod(JNIEnv *env, jobject obj, jmethodID methodID, ...)
+    jchar CallCharMethod(JNIEnv *env, jobject obj, jmethodID methodID, ...)
+    jshort CallShortMethod(JNIEnv *env, jobject obj, jmethodID methodID, ...)
+    jint CallIntMethod(JNIEnv *env, jobject obj, jmethodID methodID, ...)
+    jlong CallLongMethod(JNIEnv *env, jobject obj, jmethodID methodID, ...)
+    jfloat CallFloatMethod(JNIEnv *env, jobject obj, jmethodID methodID, ...)
+    jdouble CallDoubleMethod(JNIEnv *env, jobject obj, jmethodID methodID, ...)
+    void CallVoidMethod(JNIEnv *env, jobject obj, jmethodID methodID, ...)
+    ```
+
+    **Example:**
+    ```c
+    jclass clazz = (*env)->GetObjectClass(env, obj);
+    jmethodID mid = (*env)->GetMethodID(env, clazz, "toString", "()Ljava/lang/String;");
+    jstring result = (*env)->CallObjectMethod(env, obj, mid);
+    ```
+  </Tab>
+
+  <Tab title="Static Methods">
+    ```c
+    jobject CallStaticObjectMethod(JNIEnv *env, jclass clazz, jmethodID methodID, ...)
+    jboolean CallStaticBooleanMethod(JNIEnv *env, jclass clazz, jmethodID methodID, ...)
+    jint CallStaticIntMethod(JNIEnv *env, jclass clazz, jmethodID methodID, ...)
+    // ... other primitive types
+    void CallStaticVoidMethod(JNIEnv *env, jclass clazz, jmethodID methodID, ...)
+    ```
+  </Tab>
+
+  <Tab title="Variadic Variants">
+    ```c
+    // va_list variants
+    jobject CallObjectMethodV(JNIEnv *env, jobject obj, jmethodID methodID, va_list args)
+    jint CallIntMethodV(JNIEnv *env, jobject obj, jmethodID methodID, va_list args)
+    
+    // jvalue array variants
+    jobject CallObjectMethodA(JNIEnv *env, jobject obj, jmethodID methodID, const jvalue *args)
+    jint CallIntMethodA(JNIEnv *env, jobject obj, jmethodID methodID, const jvalue *args)
+    ```
+  </Tab>
+</Tabs>
+
+## Field Operations
+
+### Getting Field IDs
+
+```c
+jfieldID GetFieldID(JNIEnv *env,
+                    jclass clazz,
+                    const char *name,
+                    const char *sig)
+
+jfieldID GetStaticFieldID(JNIEnv *env,
+                          jclass clazz,
+                          const char *name,
+                          const char *sig)
+```
+
+### Accessing Fields
+
+```c
+// Instance fields
+jobject GetObjectField(JNIEnv *env, jobject obj, jfieldID fieldID)
+jboolean GetBooleanField(JNIEnv *env, jobject obj, jfieldID fieldID)
+jint GetIntField(JNIEnv *env, jobject obj, jfieldID fieldID)
+
+void SetObjectField(JNIEnv *env, jobject obj, jfieldID fieldID, jobject val)
+void SetBooleanField(JNIEnv *env, jobject obj, jfieldID fieldID, jboolean val)
+void SetIntField(JNIEnv *env, jobject obj, jfieldID fieldID, jint val)
+
+// Static fields
+jobject GetStaticObjectField(JNIEnv *env, jclass clazz, jfieldID fieldID)
+void SetStaticObjectField(JNIEnv *env, jclass clazz, jfieldID fieldID, jobject value)
+```
+
+## Object Creation
+
+From `src/java.base/share/native/include/jni.h:277-284`:
+
+```c
+jobject AllocObject(JNIEnv *env, jclass clazz)
+
+jobject NewObject(JNIEnv *env, jclass clazz, jmethodID methodID, ...)
+jobject NewObjectV(JNIEnv *env, jclass clazz, jmethodID methodID, va_list args)
+jobject NewObjectA(JNIEnv *env, jclass clazz, jmethodID methodID, const jvalue *args)
+```
+
+**Example:**
+```c
+jclass clazz = (*env)->FindClass(env, "java/lang/String");
+jmethodID constructor = (*env)->GetMethodID(env, clazz, "<init>", "([B)V");
+jbyteArray bytes = (*env)->NewByteArray(env, 5);
+jobject str = (*env)->NewObject(env, clazz, constructor, bytes);
+```
+
+## Reference Management
+
+### Local References
+
+From `src/java.base/share/native/include/jni.h:264-275`:
+
+```c
+void DeleteLocalRef(JNIEnv *env, jobject obj)
+
+jobject NewLocalRef(JNIEnv *env, jobject ref)
+
+jint EnsureLocalCapacity(JNIEnv *env, jint capacity)
+
+jint PushLocalFrame(JNIEnv *env, jint capacity)
+jobject PopLocalFrame(JNIEnv *env, jobject result)
+```
+
+<Warning>
+Local references are automatically freed when the native method returns, but long-running native methods should explicitly delete them to avoid resource exhaustion.
+</Warning>
+
+### Global References
+
+From `src/java.base/share/native/include/jni.h:264-267`:
+
+```c
+jobject NewGlobalRef(JNIEnv *env, jobject lobj)
+void DeleteGlobalRef(JNIEnv *env, jobject gref)
+```
+
+Global references remain valid until explicitly deleted and can be used across threads.
+
+### Weak Global References
+
+From `src/java.base/share/native/include/jni.h:1857-1861`:
+
+```c
+jweak NewWeakGlobalRef(JNIEnv *env, jobject obj)
+void DeleteWeakGlobalRef(JNIEnv *env, jweak ref)
+```
+
+Weak global references don't prevent garbage collection.
+
+### Reference Comparison
+
+```c
+jboolean IsSameObject(JNIEnv *env, jobject obj1, jobject obj2)
+
+jobjectRefType GetObjectRefType(JNIEnv *env, jobject obj)
+```
+
+## String Operations
+
+### Creating Strings
+
+```c
+jstring NewString(JNIEnv *env, const jchar *unicode, jsize len)
+jstring NewStringUTF(JNIEnv *env, const char *utf)
+```
+
+### Accessing String Content
+
+```c
+jsize GetStringLength(JNIEnv *env, jstring str)
+jsize GetStringUTFLength(JNIEnv *env, jstring str)
+
+const jchar * GetStringChars(JNIEnv *env, jstring str, jboolean *isCopy)
+void ReleaseStringChars(JNIEnv *env, jstring str, const jchar *chars)
+
+const char * GetStringUTFChars(JNIEnv *env, jstring str, jboolean *isCopy)
+void ReleaseStringUTFChars(JNIEnv *env, jstring str, const char *chars)
+```
+
+### String Regions
+
+From `src/java.base/share/native/include/jni.h:1836-1840`:
+
+```c
+void GetStringRegion(JNIEnv *env, jstring str, jsize start, jsize len, jchar *buf)
+void GetStringUTFRegion(JNIEnv *env, jstring str, jsize start, jsize len, char *buf)
+```
+
+### Critical String Access
+
+From `src/java.base/share/native/include/jni.h:1850-1854`:
+
+```c
+const jchar * GetStringCritical(JNIEnv *env, jstring string, jboolean *isCopy)
+void ReleaseStringCritical(JNIEnv *env, jstring string, const jchar *cstring)
+```
+
+<Note>
+Critical access locks the garbage collector - use sparingly and for short durations only.
+</Note>
+
+## Array Operations
+
+### Creating Arrays
+
+```c
+jbooleanArray NewBooleanArray(JNIEnv *env, jsize len)
+jbyteArray NewByteArray(JNIEnv *env, jsize len)
+jcharArray NewCharArray(JNIEnv *env, jsize len)
+jshortArray NewShortArray(JNIEnv *env, jsize len)
+jintArray NewIntArray(JNIEnv *env, jsize len)
+jlongArray NewLongArray(JNIEnv *env, jsize len)
+jfloatArray NewFloatArray(JNIEnv *env, jsize len)
+jdoubleArray NewDoubleArray(JNIEnv *env, jsize len)
+
+jobjectArray NewObjectArray(JNIEnv *env, jsize len, jclass clazz, jobject init)
+```
+
+### Array Length
+
+```c
+jsize GetArrayLength(JNIEnv *env, jarray array)
+```
+
+### Accessing Array Elements
+
+<Tabs>
+  <Tab title="Primitive Arrays">
+    ```c
+    jboolean * GetBooleanArrayElements(JNIEnv *env, jbooleanArray array, jboolean *isCopy)
+    void ReleaseBooleanArrayElements(JNIEnv *env, jbooleanArray array, jboolean *elems, jint mode)
+
+    jint * GetIntArrayElements(JNIEnv *env, jintArray array, jboolean *isCopy)
+    void ReleaseIntArrayElements(JNIEnv *env, jintArray array, jint *elems, jint mode)
+    
+    // Similar for byte, char, short, long, float, double
+    ```
+
+    **Release modes:**
+    - `0` - Copy back content and free buffer
+    - `JNI_COMMIT` - Copy back content but don't free buffer
+    - `JNI_ABORT` - Free buffer without copying back
+  </Tab>
+
+  <Tab title="Array Regions">
+    ```c
+    void GetIntArrayRegion(JNIEnv *env, jintArray array, 
+                          jsize start, jsize len, jint *buf)
+    void SetIntArrayRegion(JNIEnv *env, jintArray array,
+                          jsize start, jsize len, const jint *buf)
+    
+    // Similar for boolean, byte, char, short, long, float, double
+    ```
+  </Tab>
+
+  <Tab title="Object Arrays">
+    ```c
+    jobject GetObjectArrayElement(JNIEnv *env, jobjectArray array, jsize index)
+    void SetObjectArrayElement(JNIEnv *env, jobjectArray array, jsize index, jobject val)
+    ```
+  </Tab>
+
+  <Tab title="Critical Access">
+    From `src/java.base/share/native/include/jni.h:1843-1847`:
+
+    ```c
+    void * GetPrimitiveArrayCritical(JNIEnv *env, jarray array, jboolean *isCopy)
+    void ReleasePrimitiveArrayCritical(JNIEnv *env, jarray array, void *carray, jint mode)
+    ```
+
+    <Warning>
+    Critical access may disable GC - use only for very short operations.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Exception Handling
+
+From `src/java.base/share/native/include/jni.h:246-257`:
+
+```c
+jint Throw(JNIEnv *env, jthrowable obj)
+jint ThrowNew(JNIEnv *env, jclass clazz, const char *msg)
+
+jthrowable ExceptionOccurred(JNIEnv *env)
+void ExceptionDescribe(JNIEnv *env)
+void ExceptionClear(JNIEnv *env)
+jboolean ExceptionCheck(JNIEnv *env)
+
+void FatalError(JNIEnv *env, const char *msg)
+```
+
+### Exception Handling Pattern
+
+```c
+jthrowable exception = (*env)->ExceptionOccurred(env);
+if (exception) {
+    (*env)->ExceptionDescribe(env);  // Print to stderr
+    (*env)->ExceptionClear(env);      // Clear the exception
+    // Handle error
+    return NULL;
+}
+```
+
+## Monitor Operations
+
+From `src/java.base/share/native/include/jni.h:1825-1830`:
+
+```c
+jint MonitorEnter(JNIEnv *env, jobject obj)
+jint MonitorExit(JNIEnv *env, jobject obj)
+```
+
+**Example:**
+```c
+if ((*env)->MonitorEnter(env, obj) != JNI_OK) {
+    // Handle error
+}
+// Critical section
+(*env)->MonitorExit(env, obj);
+```
+
+## Direct ByteBuffers
+
+From `src/java.base/share/native/include/jni.h:1868-1876`:
+
+```c
+jobject NewDirectByteBuffer(JNIEnv* env, void* address, jlong capacity)
+void* GetDirectBufferAddress(JNIEnv* env, jobject buf)
+jlong GetDirectBufferCapacity(JNIEnv* env, jobject buf)
+```
+
+Direct buffers enable efficient data transfer between Java and native code without copying.
+
+## Reflection Support
+
+From `src/java.base/share/native/include/jni.h:230-244`:
+
+```c
+jmethodID FromReflectedMethod(JNIEnv *env, jobject method)
+jfieldID FromReflectedField(JNIEnv *env, jobject field)
+
+jobject ToReflectedMethod(JNIEnv *env, jclass cls, jmethodID methodID, jboolean isStatic)
+jobject ToReflectedField(JNIEnv *env, jclass cls, jfieldID fieldID, jboolean isStatic)
+```
+
+## Module Support
+
+From `src/java.base/share/native/include/jni.h:1883-1885`:
+
+```c
+jobject GetModule(JNIEnv *env, jclass clazz)
+```
+
+## Virtual Thread Support
+
+From `src/java.base/share/native/include/jni.h:1889-1891`:
+
+```c
+jboolean IsVirtualThread(JNIEnv *env, jobject obj)
+```
+
+## JavaVM Interface
+
+### Getting JNI Environment
+
+From `src/java.base/share/native/include/jni.h:1832-1834`:
+
+```c
+jint GetJavaVM(JNIEnv *env, JavaVM **vm)
+```
+
+### Attaching Threads
+
+```c
+jint AttachCurrentThread(JavaVM *vm, void **penv, void *args)
+jint AttachCurrentThreadAsDaemon(JavaVM *vm, void **penv, void *args)
+jint DetachCurrentThread(JavaVM *vm)
+```
+
+### Example: Native Thread Attaching
+
+```c
+JavaVM *cached_jvm;
+
+void native_thread_function(void *arg) {
+    JNIEnv *env;
+    jint result = (*cached_jvm)->AttachCurrentThread(cached_jvm, (void**)&env, NULL);
+    if (result != JNI_OK) {
+        // Handle error
+        return;
+    }
+    
+    // Use JNI functions
+    jclass clazz = (*env)->FindClass(env, "com/example/MyClass");
+    
+    // Detach before thread exits
+    (*cached_jvm)->DetachCurrentThread(cached_jvm);
+}
+```
+
+## Best Practices
+
+<Warning>
+**Critical Guidelines:**
+
+1. **Always check for exceptions** after JNI calls that may throw
+2. **Delete local references** in long-running or looping native methods
+3. **Release array elements** after accessing them
+4. **Release string chars** after accessing them
+5. **Never cache JNIEnv pointers** across threads
+6. **Always detach** native threads before they exit
+7. **Use global references** for objects used across native method calls
+</Warning>
+
+<Note>
+**Performance Tips:**
+
+- Cache class, method, and field IDs when possible
+- Use critical access for very short operations on arrays/strings
+- Prefer array region operations over element-by-element access
+- Use RegisterNatives for better startup performance
+- Minimize JNI boundary crossings
+</Note>

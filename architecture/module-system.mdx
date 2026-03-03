@@ -1,0 +1,571 @@
+---
+title: "Java Platform Module System"
+description: "Architecture and implementation of JPMS in OpenJDK"
+---
+
+The Java Platform Module System (JPMS), introduced in Java 9, provides a mechanism for organizing large codebases into modular units with explicit dependencies and encapsulation.
+
+## Module System Overview
+
+JPMS fundamentally changed how Java applications are structured and deployed:
+
+<CardGroup cols={2}>
+  <Card title="Strong Encapsulation" icon="lock">
+    Packages are private by default, only exported packages are accessible
+  </Card>
+  <Card title="Explicit Dependencies" icon="diagram-project">
+    Modules declare what they require and provide
+  </Card>
+  <Card title="Reliable Configuration" icon="circle-check">
+    Missing dependencies detected at startup
+  </Card>
+  <Card title="Improved Security" icon="shield">
+    Reduced attack surface through encapsulation
+  </Card>
+</CardGroup>
+
+## Module Descriptor
+
+Every module contains a `module-info.class` file compiled from `module-info.java`. The Java-level API is defined in `src/java.base/share/classes/java/lang/module/ModuleDescriptor.java`.
+
+### Module Types
+
+From `ModuleDescriptor.java`:
+
+> "A module descriptor describes a normal, open, or automatic module. Normal modules and open modules describe their dependences, exported-packages, the services that they use or provide, and other components. Normal modules may open specific packages. The module descriptor for an open module does not declare any open packages but when instantiated in the Java virtual machine then it is treated as if all packages are open."
+
+<Tabs>
+  <Tab title="Normal Module">
+    Standard explicit module:
+    
+    ```java
+    module com.example.app {
+        requires java.base;         // Implicit, always present
+        requires java.sql;
+        requires transitive java.xml;
+        
+        exports com.example.api;
+        exports com.example.spi to com.example.impl;
+        
+        opens com.example.internal to java.base;
+        
+        uses com.example.spi.Service;
+        provides com.example.spi.Service 
+            with com.example.impl.ServiceImpl;
+    }
+    ```
+    
+    - Explicit dependencies via `requires`
+    - Controlled API via `exports`
+    - Reflection access via `opens`
+    - Service loading via `uses`/`provides`
+  </Tab>
+  <Tab title="Open Module">
+    Module with relaxed encapsulation:
+    
+    ```java
+    open module com.example.legacy {
+        requires java.base;
+        exports com.example.api;
+    }
+    ```
+    
+    - All packages open for deep reflection
+    - Useful for frameworks requiring reflection
+    - Backwards compatibility with pre-module code
+    - Less secure than normal modules
+  </Tab>
+  <Tab title="Automatic Module">
+    JAR on module path without module-info:
+    
+    - Module name derived from JAR filename
+    - Exports all packages
+    - Reads all other modules
+    - No explicit dependencies declared
+    - Transition mechanism for legacy JARs
+    
+    From the source:
+    > "Automatic modules receive special treatment during resolution so that they read all other modules in the configuration."
+  </Tab>
+</Tabs>
+
+### Module Modifiers
+
+From `ModuleDescriptor.java`:
+
+```java
+public enum Modifier {
+    OPEN,        // Open module (all packages open)
+    AUTOMATIC,   // Automatic module (JAR without module-info)
+    SYNTHETIC,   // Not explicitly declared
+    MANDATED     // Implicitly declared
+}
+```
+
+## VM Implementation
+
+The HotSpot VM implements JPMS through several interconnected subsystems.
+
+### ModuleEntry
+
+The core VM representation of a module is `ModuleEntry`, defined in `src/hotspot/share/classfile/moduleEntry.hpp`:
+
+```cpp
+// A ModuleEntry describes a module that has been defined by 
+// a call to JVM_DefineModule. It contains:
+//   - Symbol* containing the module's name
+//   - pointer to the java.lang.Module representation
+//   - pointer to java.security.ProtectionDomain
+//   - ClassLoaderData*, class loader of this module
+//   - growable array containing other readable modules
+//   - flag indicating if this module can read all unnamed modules
+
+class ModuleEntry : public CHeapObj<mtModule> {
+private:
+  OopHandle _module_handle;          // java.lang.Module
+  OopHandle _shared_pd;              // java.security.ProtectionDomain
+  Symbol*          _name;            // module name
+  ClassLoaderData* _loader_data;
+  AOTGrowableArray<ModuleEntry*>* _reads;  // readable modules
+  
+  Symbol* _version;                  // module version
+  Symbol* _location;                 // module location
+  bool _can_read_all_unnamed;
+  bool _has_default_read_edges;
+  bool _must_walk_reads;
+  bool _is_open;                     // open module?
+  bool _is_patched;                  // --patch-module
+};
+```
+
+<Info>
+Each module in the VM has an associated `ModuleEntry` that tracks its metadata, dependencies, and relationship to other modules.
+</Info>
+
+### Key Fields
+
+**Module Identity:**
+- `_name` - Module name symbol (e.g., "java.base")
+- `_version` - Optional version string  
+- `_location` - Module location (JAR path, etc.)
+- `_module_handle` - Reference to `java.lang.Module` object
+
+**Module Relationships:**
+- `_reads` - Modules this module can access
+- `_can_read_all_unnamed` - Special flag for automatic modules
+- `_loader_data` - Associated class loader
+
+**Module Properties:**
+- `_is_open` - Whether all packages are unqualifiedly exported
+- `_is_patched` - Module modified by `--patch-module`
+- `_must_walk_reads` - GC safepoint requirement
+
+### Module Constants
+
+From `moduleEntry.hpp`:
+
+```cpp
+#define UNNAMED_MODULE "unnamed module"
+#define UNNAMED_MODULE_LEN 14
+#define JAVAPKG "java"
+#define JAVAPKG_LEN 4
+#define JAVA_BASE_NAME "java.base"
+#define JAVA_BASE_NAME_LEN 9
+
+enum {MODULE_READS_SIZE = 101};  // Initial reads list size
+```
+
+## Module Resolution
+
+Module resolution happens at VM startup through the `Resolver` class (`src/java.base/share/classes/java/lang/module/Resolver.java`).
+
+### Resolution Process
+
+<Tabs>
+  <Tab title="1. Discovery">
+    Find available modules:
+    
+    - Scan module path
+    - Identify module descriptors
+    - Validate module-info.class files
+    - Build module graph
+    
+    Implemented by `ModuleFinder` interface.
+  </Tab>
+  <Tab title="2. Resolution">
+    Build complete module graph:
+    
+    1. Start with root modules (application, platform)
+    2. Resolve `requires` dependencies recursively
+    3. Handle `requires transitive` relationships
+    4. Detect and report missing modules
+    5. Detect cyclic dependencies
+    
+    Fails fast if dependencies cannot be satisfied.
+  </Tab>
+  <Tab title="3. Configuration">
+    Create configuration:
+    
+    - Build `Configuration` object
+    - Contains `ResolvedModule` instances
+    - Represents complete module graph
+    - Used to create module layers
+    
+    From `Configuration.java`:
+    ```java
+    public final class Configuration {
+        // Immutable module graph after resolution
+        Set<ResolvedModule> modules();
+        Optional<ResolvedModule> findModule(String name);
+    }
+    ```
+  </Tab>
+  <Tab title="4. Instantiation">
+    Create module layer:
+    
+    - Map modules to class loaders
+    - Define modules in VM (JVM_DefineModule)
+    - Create java.lang.Module objects
+    - Establish readability relationships
+    - Set up package exports
+  </Tab>
+</Tabs>
+
+### Module Layers
+
+Modules are organized into layers:
+
+```
+┌─────────────────────────┐
+│  Application Layer      │  (app modules)
+├─────────────────────────┤
+│  Platform Layer         │  (jdk.* modules)
+├─────────────────────────┤
+│  Boot Layer             │  (java.* modules)
+└─────────────────────────┘
+```
+
+Each layer:
+- Has a parent layer (except boot layer)
+- Contains a set of modules  
+- Maps modules to class loaders
+- Can be created dynamically
+
+## Access Control
+
+JPMS enforces access control at multiple levels:
+
+### Package Access
+
+```java
+// In module A:
+module com.example.a {
+    exports com.example.api;              // Public API
+    exports com.example.spi to com.example.b;  // Qualified export
+    // com.example.internal not exported - inaccessible
+}
+
+// In module B:
+module com.example.b {
+    requires com.example.a;
+    // Can access: com.example.api, com.example.spi
+    // Cannot access: com.example.internal
+}
+```
+
+### Reflection Access
+
+Different levels of reflection access:
+
+<CardGroup cols={2}>
+  <Card title="Normal Module">
+    Public classes/members accessible via reflection only if exported
+  </Card>
+  <Card title="Opens Directive">
+    `opens` allows deep reflection to specific modules or all modules
+  </Card>
+  <Card title="Open Module">
+    All packages open for deep reflection
+  </Card>
+  <Card title="Command Line">
+    `--add-opens` breaks encapsulation at runtime
+  </Card>
+</CardGroup>
+
+### VM Access Checks
+
+The VM enforces access at:
+
+1. **Class loading time** - Verify package exports
+2. **Link resolution time** - Check method/field access
+3. **Reflection time** - Validate setAccessible() calls
+4. **JNI calls** - FindClass respects module boundaries
+
+## Service Loading
+
+JPMS integrates with `ServiceLoader` mechanism:
+
+### Provider Module
+
+```java
+module com.example.provider {
+    requires com.example.api;
+    provides com.example.api.Service 
+        with com.example.impl.ServiceImpl;
+}
+```
+
+### Consumer Module
+
+```java
+module com.example.consumer {
+    requires com.example.api;
+    uses com.example.api.Service;
+}
+```
+
+### Service Resolution
+
+At runtime:
+1. `ServiceLoader.load()` called
+2. VM searches all modules with `provides` declarations
+3. Matching providers instantiated
+4. Services returned to caller
+
+<Note>
+Service loading respects module boundaries - only providers in readable modules are discovered.
+</Note>
+
+## Module Path vs Class Path
+
+Two mechanisms for loading code:
+
+| Aspect | Module Path | Class Path |
+|--------|-------------|------------|
+| **Units** | Modules | JARs/directories |
+| **Encapsulation** | Strong | None |
+| **Dependencies** | Explicit | Implicit |
+| **Versioning** | Module version | None |
+| **Resolution** | Startup | Lazy |
+| **Split Packages** | Forbidden | Allowed |
+
+### Unnamed Module
+
+Code on classpath runs in the "unnamed module":
+- No name or descriptor
+- Exports all packages
+- Reads all other modules
+- Cannot be required by named modules
+
+## Platform Modules
+
+The JDK is modularized into ~70 modules:
+
+### Core Modules
+
+```
+java.base          - Fundamental classes (Object, String, etc.)
+java.desktop       - AWT, Swing, JavaBeans
+java.xml           - XML processing
+java.sql           - JDBC
+java.management    - JMX
+java.logging       - Logging API
+```
+
+### JDK Modules
+
+```
+jdk.compiler       - javac compiler
+jdk.jdeps          - Dependency analysis tools  
+jdk.jlink          - Module linking tool
+jdk.graal.compiler - Graal JIT compiler
+jdk.hotspot.agent  - Serviceability agent
+```
+
+### Module Graph
+
+All modules transitively require `java.base`:
+
+```
+java.base (required by all)
+  ↑
+  ├── java.sql
+  ├── java.xml
+  │    ↑
+  │    └── java.desktop
+  └── java.logging
+```
+
+## Implementation Details
+
+### JVM_DefineModule
+
+Native method that defines a module in the VM:
+
+```cpp
+// Creates ModuleEntry in VM
+// Links to java.lang.Module object
+// Establishes module metadata
+// Validates module descriptor
+JVM_ENTRY(void, JVM_DefineModule(JNIEnv *env, 
+                                  jobject module,
+                                  jstring name,
+                                  /* ... */))
+```
+
+Called during module layer creation.
+
+### Package Exports
+
+Packages tracked via `PackageEntry` objects:
+
+```cpp
+class PackageEntry {
+  Symbol* _name;                    // package name
+  ModuleEntry* _module;             // containing module
+  bool _is_exported;                // exported to all?
+  GrowableArray<ModuleEntry*>* _qualified_exports; // qualified exports
+};
+```
+
+### Module Reads
+
+Readability established through `ModuleEntry::_reads`:
+
+```cpp
+void ModuleEntry::add_read(ModuleEntry* m) {
+  // Add m to this module's reads list
+  // Enables this module to access m's exports
+}
+
+bool ModuleEntry::can_read(ModuleEntry* m) {
+  // Check if this module can read m
+  // Used during class loading and linking
+}
+```
+
+## Command Line Options
+
+JPMS behavior can be modified:
+
+### Breaking Encapsulation
+
+```bash
+# Export package to module:
+--add-exports source.module/package=target.module
+
+# Open package for reflection:
+--add-opens source.module/package=target.module
+
+# Export to all unnamed modules:
+--add-exports java.base/sun.misc=ALL-UNNAMED
+```
+
+### Module Dependencies
+
+```bash
+# Add dependency:
+--add-modules module.name
+
+# Add dependency to all modules:
+--add-modules ALL-MODULE-PATH
+
+# Add dependency to system modules:
+--add-modules ALL-SYSTEM
+```
+
+### Patching Modules
+
+```bash
+# Replace module content:
+--patch-module java.base=path/to/patches
+
+# Used for debugging and testing
+# Classes in patch override module classes
+```
+
+## Migration Strategies
+
+### Bottom-Up Migration
+
+1. Modularize low-level libraries first
+2. Work up dependency tree
+3. Application modules last
+
+### Top-Down Migration
+
+1. Create automatic modules from JARs
+2. Gradually add module descriptors
+3. Refine dependencies over time
+
+### Hybrid Approach
+
+- Use automatic modules for dependencies
+- Modularize your code
+- Wait for library updates
+
+<Info>
+Automatic modules are the bridge between classpath and module path, allowing incremental migration.
+</Info>
+
+## Performance Considerations
+
+### Faster Class Loading
+
+- Module boundaries enable better class lookup
+- No need to scan entire classpath
+- Package ownership clearly defined
+
+### Smaller Runtime Images
+
+`jlink` creates custom runtime images:
+
+```bash
+jlink --module-path $JAVA_HOME/jmods:mods \
+      --add-modules com.example.app \
+      --output custom-runtime
+```
+
+Result: Minimal JDK with only required modules (50-100MB vs. 300MB+)
+
+### Improved Security
+
+- Reduced attack surface (unexported packages)
+- Stronger encapsulation than classpath
+- Critical internal APIs protected
+
+## Debugging Modules
+
+### Module Information
+
+```bash
+# List modules:
+java --list-modules
+
+# Describe module:
+java --describe-module java.sql
+
+# Show module resolution:
+java --show-module-resolution -m app/Main
+```
+
+### Dependency Analysis
+
+```bash
+# Analyze dependencies:
+jdeps --module-path mods -m com.example.app
+
+# Generate module-info suggestions:
+jdeps --generate-module-info . app.jar
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture Overview" href="/architecture/overview">
+    Return to architecture overview
+  </Card>
+  <Card title="HotSpot VM" href="/architecture/hotspot-vm">
+    Explore VM internals
+  </Card>
+</CardGroup>

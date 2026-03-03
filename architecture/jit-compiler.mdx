@@ -1,0 +1,511 @@
+---
+title: "JIT Compilation"
+description: "Just-In-Time compilation in HotSpot including C1, C2, and Graal compilers"
+---
+
+HotSpot's Just-In-Time (JIT) compilation system transforms bytecode into optimized native machine code at runtime. The VM includes multiple compiler implementations optimized for different scenarios.
+
+## Compiler Architecture
+
+HotSpot integrates three main compiler implementations:
+
+<CardGroup cols={3}>
+  <Card title="C1 Compiler" icon="gauge">
+    Fast client compiler for quick startup
+  </Card>
+  <Card title="C2 Compiler" icon="gauge-high">
+    Optimizing server compiler for peak performance  
+  </Card>
+  <Card title="Graal Compiler" icon="diagram-project">
+    Java-based experimental compiler via JVMCI
+  </Card>
+</CardGroup>
+
+## C1 Client Compiler
+
+The C1 compiler provides fast compilation with moderate optimization. Located in `src/hotspot/share/c1/`.
+
+### Design Philosophy
+
+From `c1_Compiler.hpp`:
+
+```cpp
+// There is one instance of the Compiler per CompilerThread.
+
+class Compiler: public AbstractCompiler {
+  virtual const char* name() { return "C1"; }
+  
+  virtual void compile_method(ciEnv* env, 
+                             ciMethod* target, 
+                             int entry_bci,
+                             bool install_code,
+                             DirectiveSet* directive);
+};
+```
+
+C1 prioritizes:
+- **Fast compilation speed** - Compiles methods quickly
+- **Low overhead** - Minimal memory and CPU usage
+- **Profiling support** - Gathers runtime statistics for C2
+
+### Compilation Pipeline
+
+C1 uses a structured compilation pipeline:
+
+```
+Bytecode → HIR → LIR → Machine Code
+    ↓        ↓      ↓         ↓
+  Parse  Optimize  Lower   Register
+                          Allocation
+```
+
+<Tabs>
+  <Tab title="High-Level IR (HIR)">
+    First intermediate representation (`c1_Instruction.hpp`, `c1_IR.hpp`):
+    
+    - **Graph-based** - Control flow and data flow graphs
+    - **SSA form** - Static Single Assignment for optimization
+    - **Type information** - Preserves Java type semantics
+    
+    HIR optimizations:
+    - Constant folding and propagation
+    - Common subexpression elimination
+    - Null check elimination
+    - Method inlining (limited)
+  </Tab>
+  <Tab title="Low-Level IR (LIR)">
+    Machine-oriented representation (`c1_LIR.hpp`):
+    
+    - **Linear instruction sequence** - Closer to machine code
+    - **Virtual registers** - Infinite register set
+    - **Explicit control flow** - Blocks and branches
+    
+    LIR generation:
+    - Tree-walking code generation from HIR
+    - Platform-specific instruction selection  
+    - Safepoint insertion
+    - GC barrier insertion
+  </Tab>
+  <Tab title="Code Generation">
+    Final machine code emission (`c1_CodeStubs.hpp`):
+    
+    - **Register allocation** - Linear scan algorithm
+    - **Instruction scheduling** - Basic block level
+    - **Code emission** - Platform-specific assembler
+    - **Metadata generation** - OopMaps, exception handlers
+    
+    C1 uses a fast linear-scan register allocator for quick compilation.
+  </Tab>
+</Tabs>
+
+### Graph Building
+
+The `c1_GraphBuilder` class constructs HIR from bytecode:
+
+```cpp
+// From c1_GraphBuilder.hpp:
+class GraphBuilder {
+  // Parses bytecode and builds HIR graph
+  // Handles:
+  // - Control flow (branches, loops, exceptions)
+  // - Type inference and checking
+  // - Inlining decisions
+  // - Profile data collection points
+};
+```
+
+### Frame Maps
+
+C1 maintains frame maps (`c1_FrameMap.hpp`) for:
+- Local variable locations (stack/register)
+- Spill slot management  
+- Calling convention handling
+- Debugger support
+
+### Profiling Support
+
+When compiling with profiling (tiered compilation levels 2-3):
+
+- **Method invocation counters** - Track call frequency
+- **Branch counters** - Record branch taken/not-taken
+- **Type profiles** - Receiver types at call sites
+- **Null check profiles** - Null/non-null statistics
+
+This data guides C2 optimization decisions.
+
+## C2 Server Compiler
+
+The C2 compiler performs aggressive optimization for peak performance. Located in `src/hotspot/share/opto/`.
+
+### Design Philosophy  
+
+From `c2compiler.hpp`:
+
+```cpp
+class C2Compiler : public AbstractCompiler {
+  const char *name() { return "C2"; }
+  
+  // Compilation with aggressive optimization
+  void compile_method(ciEnv* env,
+                     ciMethod* target,
+                     int entry_bci,
+                     bool install_code,
+                     DirectiveSet* directive);
+  
+  // Retry mechanisms for optimization failures:
+  static const char* retry_no_subsuming_loads();
+  static const char* retry_no_escape_analysis();
+  static const char* retry_no_iterative_escape_analysis();
+  // ...
+};
+```
+
+C2 features:
+- **Aggressive optimizations** - Peak performance focus
+- **Sea-of-nodes IR** - Flexible graph-based representation
+- **Global analysis** - Whole-method optimization
+- **Speculative optimizations** - Profile-guided assumptions
+
+<Info>
+C2 is called "opto" in the source tree because it was originally the "optimizing compiler" contrasted with the simpler C1.
+</Info>
+
+### Sea-of-Nodes IR
+
+C2's intermediate representation is a graph where:
+
+- **Nodes** represent operations (`addnode.hpp`, `callnode.hpp`, etc.)
+- **Edges** represent dependencies (data and control)
+- **No fixed order** - Scheduler determines execution order
+- **Ideal transformations** - Pattern-based optimization
+
+Node types include:
+
+```cpp
+// From various *node.hpp files:
+AddNode      - Integer/FP addition
+CallNode     - Method invocations  
+LoadNode     - Memory reads
+StoreNode    - Memory writes
+IfNode       - Conditional branches
+LoopNode     - Loop headers
+PhiNode      - SSA merge points
+// ... hundreds of node types
+```
+
+### Optimization Phases
+
+C2 compilation proceeds through multiple phases:
+
+<Tabs>
+  <Tab title="Parsing">
+    Bytecode → Initial graph (`bytecodeInfo.cpp`):
+    
+    1. **Parse bytecodes** - Build initial node graph
+    2. **Inlining** - Aggressive method inlining decisions
+    3. **Type sharpening** - Refine types using profiles
+    4. **Exception handling** - Build exception control flow
+    
+    Inlining decisions based on:
+    - Method size and complexity
+    - Call frequency (from profiles)
+    - Inline depth limits
+    - Compilation budget
+  </Tab>
+  <Tab title="Optimization">
+    Graph transformations:
+    
+    **IGVN** (Iterative Global Value Numbering):
+    - Common subexpression elimination
+    - Constant folding and propagation  
+    - Algebraic simplifications
+    - Dead code elimination
+    
+    **CCP** (Conditional Constant Propagation):
+    - Flow-sensitive constant propagation
+    - Unreachable code detection
+    
+    **Loop Optimizations** (`loopnode.cpp`, `loopopts.cpp`):
+    - Loop unrolling
+    - Loop peeling
+    - Loop unswitching  
+    - Induction variable analysis
+    - Range check elimination
+    
+    **Escape Analysis** (`escape.cpp`):
+    - Scalar replacement of aggregates
+    - Stack allocation of non-escaping objects
+    - Lock elision for local objects
+    - Elimination of allocation
+  </Tab>
+  <Tab title="Code Generation">
+    Graph → Machine code:
+    
+    1. **GCM** (Global Code Motion) - Schedule nodes optimally
+    2. **Register Allocation** - Chaitin-style graph coloring
+    3. **Peephole Optimization** - Local instruction patterns  
+    4. **Code Emission** - Platform-specific assembly
+    
+    Platform-specific backends:
+    - `src/hotspot/cpu/x86/` - x86/x64 code generation
+    - `src/hotspot/cpu/aarch64/` - ARM 64-bit
+    - Architecture description files (`.ad` files)
+  </Tab>
+</Tabs>
+
+### Ideal Graph Transformations
+
+C2's optimization engine applies pattern-based transformations:
+
+```cpp
+// Conceptual example from node optimization:
+IdentityNode(AddNode(x, 0)) → x  // x + 0 = x
+IdentityNode(MulNode(x, 1)) → x  // x * 1 = x  
+AddNode(AddNode(x, c1), c2) → AddNode(x, c1+c2)  // constant folding
+```
+
+Each node type implements:
+- `Ideal()` - Graph transformations
+- `Identity()` - Identity simplifications
+- `Value()` - Constant folding
+
+### Deoptimization Support
+
+C2 can speculatively optimize based on profile data. If assumptions are violated:
+
+1. **Uncommon trap** triggered
+2. Execution **deoptimizes** to interpreter
+3. Interpreter continues execution
+4. Method may be **recompiled** with different assumptions
+
+Deoptimization metadata (`buildOopMap.cpp`):
+- Maps machine state → interpreter state  
+- Reconstructs stack frames
+- Restores Java-visible state
+
+### SuperWord Optimization
+
+C2 includes automatic vectorization (`superword.cpp`):
+
+- Identifies parallel operations in loops
+- Combines scalar operations into SIMD instructions
+- Platform-specific vector instruction support
+- Significant speedups for array operations
+
+## Graal Compiler
+
+Graal is a Java-based compiler accessible via JVMCI (JVM Compiler Interface). Located in `src/jdk.graal.compiler/`.
+
+### JVMCI Architecture
+
+The JVMCI interface (`src/hotspot/share/jvmci/`) provides:
+
+```cpp
+// From jvmciCompiler.hpp:
+class JVMCICompiler : public AbstractCompiler {
+  // Java-based compiler implementation
+  // Compilation requests forwarded to Java code
+  // Runtime services provided by VM
+};
+```
+
+**Key JVMCI Components:**
+
+- **CompilerToVM** - VM services for compiler (metadata access, etc.)
+- **VMToCompiler** - Compiler callbacks from VM  
+- **Code Installation** - Installing compiled code
+- **Metadata Access** - Reading VM structures from Java
+
+### Graal Benefits
+
+<CardGroup cols={2}>
+  <Card title="Modern Java" icon="code">
+    Written in Java, easier to understand and modify
+  </Card>
+  <Card title="Advanced Optimizations" icon="wand-magic-sparkles">
+    Partial evaluation, advanced inlining
+  </Card>
+  <Card title="Language Agnostic" icon="earth-americas">
+    Powers GraalVM polyglot execution
+  </Card>
+  <Card title="Research Platform" icon="flask">
+    Experimental optimizations and techniques
+  </Card>
+</CardGroup>
+
+### Graal vs C2
+
+| Aspect | C2 | Graal |
+|--------|----|---------|
+| **Language** | C++ | Java |
+| **Maturity** | Decades of tuning | Newer, evolving |
+| **Peak Performance** | Excellent | Comparable |
+| **Compile Time** | Fast | Slower |
+| **Extensibility** | Limited | Excellent |
+| **Partial Evaluation** | No | Yes |
+
+<Note>
+Graal can be used as a replacement for C2 with `-XX:+UseJVMCICompiler` but is not the default in standard OpenJDK builds.
+</Note>
+
+## Tiered Compilation
+
+Modern HotSpot combines interpreters and compilers in a tiered strategy:
+
+### Compilation Levels
+
+| Level | Execution Mode | Profiling | Optimizations | Purpose |
+|-------|----------------|-----------|---------------|----------|
+| **0** | Interpreter | Yes | None | Initial execution, gathering data |
+| **1** | C1 | No | Minimal | Fast compilation, no profiling |
+| **2** | C1 | Yes | Minimal | Limited C1 with full profiling |
+| **3** | C1 | Yes | Full | Full C1 optimization with profiling |
+| **4** | C2 | No | Aggressive | Peak performance optimization |
+
+### Transition Strategy
+
+Typical progression for a hot method:
+
+```
+Interpreter (L0) → Simple C1 (L3) → C2 (L4)
+     ↓                  ↓              ↓
+  Profiling         Profiling     Peak perf
+```
+
+Alternative paths:
+- **L0 → L1** - Quick compilation without profiling
+- **L0 → L3 → L1** - Deoptimize if method gets cold
+- **L3 → L4** - Recompile with C2 when very hot
+
+### Compilation Thresholds
+
+Controlled by invocation and back-edge counters:
+
+```cpp
+// From invocationCounter.hpp:
+class InvocationCounter {
+  uint _counter;  // Combined counter value
+  
+  // Methods to update and check thresholds
+  void increment();
+  bool reached_threshold();
+};
+```
+
+Configurable via flags:
+- `-XX:Tier0InvokeNotifyFreqLog` - Interpreter threshold
+- `-XX:Tier3InvocationThreshold` - C1 threshold
+- `-XX:Tier4InvocationThreshold` - C2 threshold
+
+## Compilation Queue
+
+Compilation requests are managed by a priority queue:
+
+1. **Method nominated** for compilation (threshold reached)
+2. **Added to queue** with priority (based on hotness)
+3. **CompilerThread** dequeues and compiles
+4. **Code installed** in code cache
+5. **Future calls** use compiled version
+
+### CompilerThreads
+
+Dedicated threads for compilation:
+
+```cpp
+// Thread hierarchy from thread.hpp:
+JavaThread
+  └── CompilerThread  // Runs C1/C2 compilation tasks
+```
+
+Thread count configurable:
+- `-XX:CICompilerCount=N` - Total compiler threads
+- `-XX:CICompilerCountPerCPU` - Threads per CPU
+
+Default: 2 C1 threads + (N-2) C2 threads on N-core systems
+
+## Intrinsics
+
+Both C1 and C2 support intrinsic methods - hand-written assembly for critical operations:
+
+```cpp
+// From c1_Compiler.hpp and c2compiler.hpp:
+static bool is_intrinsic_supported(vmIntrinsics::ID id);
+```
+
+**Common intrinsics:**
+- `String.equals()` - Vectorized string comparison
+- `System.arraycopy()` - Optimized memory copy
+- `Math.sin/cos/sqrt()` - Native math routines  
+- `Unsafe` operations - Direct memory access
+- `AES` encryption - Hardware-accelerated crypto
+- `CRC32` - SIMD checksums
+
+Intrinsics provide 10-100x speedups for critical operations.
+
+## Code Cache
+
+Compiled code stored in code cache (`src/hotspot/share/code/`):
+
+### Code Cache Segments
+
+- **Non-nmethods** - VM runtime stubs, adapters
+- **Profiled nmethods** - C1-compiled methods with profiling
+- **Non-profiled nmethods** - C2-optimized methods
+
+Each segment can be sized independently:
+- `-XX:NonNMethodCodeHeapSize`
+- `-XX:ProfiledCodeHeapSize`  
+- `-XX:NonProfiledCodeHeapSize`
+
+### Code Cache Management
+
+When code cache fills:
+1. **Flush old code** - Remove cold/unused methods
+2. **Stop compilation** - No more JIT until space available
+3. **Log warning** - "Code cache is full"
+
+Monitor with: `-XX:+PrintCodeCache`
+
+## Performance Tuning
+
+### Disable Tiered Compilation
+
+```bash
+# Use only C2 (for throughput):
+java -XX:-TieredCompilation ...
+
+# Use only C1 (for fast startup):
+java -XX:TieredStopAtLevel=1 ...
+```
+
+### Compilation Logging
+
+```bash
+# See compilation activity:
+java -XX:+PrintCompilation ...
+
+# Detailed compilation logs:
+java -XX:+UnlockDiagnosticVMOptions \
+     -XX:+LogCompilation \
+     -XX:LogFile=compilation.log ...
+```
+
+### Inline Tuning
+
+```bash
+# Increase inline limits:
+-XX:MaxInlineLevel=15        # Inline depth
+-XX:MaxInlineSize=50         # Bytecode size
+-XX:FreqInlineSize=200       # Hot method size
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="HotSpot VM" href="/architecture/hotspot-vm">
+    VM architecture and runtime
+  </Card>
+  <Card title="Module System" href="/architecture/module-system">
+    JPMS implementation details
+  </Card>
+</CardGroup>

@@ -1,0 +1,600 @@
+---
+title: "JGSS API"
+description: "Java Generic Security Services (GSS-API) for authentication and secure communication using Kerberos and other mechanisms"
+---
+
+## Overview
+
+The Java Generic Security Services API (JGSS) provides a framework for applications to perform secure authentication and communication using security services like Kerberos v5. The API is based on the IETF GSS-API specification defined in RFC 2743 and RFC 2744.
+
+Key features include:
+
+- **Authentication**: Mutual authentication between client and server
+- **Message Protection**: Integrity and confidentiality for messages
+- **Credential Delegation**: Forward credentials to enable multi-tier authentication
+- **Mechanism Independence**: Pluggable security mechanisms (primarily Kerberos v5)
+
+The JGSS API is located in the `org.ietf.jgss` package.
+
+## Core Classes
+
+### GSSManager
+
+Factory class for creating GSS-API objects. Entry point for the GSS-API.
+
+<CodeGroup>
+```java Get Manager Instance
+import org.ietf.jgss.*;
+
+public class GSSExample {
+    public static void main(String[] args) throws GSSException {
+        // Get the default GSSManager instance
+        GSSManager manager = GSSManager.getInstance();
+        
+        // Kerberos v5 mechanism OID
+        Oid krb5Mechanism = new Oid("1.2.840.113554.1.2.2");
+        Oid krb5PrincipalNameType = new Oid("1.2.840.113554.1.2.2.1");
+        
+        // Create a name for the client
+        GSSName clientName = manager.createName("user@REALM", 
+                                               GSSName.NT_USER_NAME);
+        
+        // Create a name for the server
+        GSSName serverName = manager.createName("service/host@REALM",
+                                               krb5PrincipalNameType);
+    }
+}
+```
+
+```java Create Credentials
+public static GSSCredential createCredentials(GSSManager manager,
+                                             GSSName name) 
+        throws GSSException {
+    return manager.createCredential(
+        name,
+        GSSCredential.DEFAULT_LIFETIME,
+        new Oid("1.2.840.113554.1.2.2"),
+        GSSCredential.INITIATE_ONLY
+    );
+}
+```
+</CodeGroup>
+
+<ResponseField name="getInstance()" type="static GSSManager">
+  Returns the default GSSManager implementation.
+</ResponseField>
+
+<ResponseField name="createName(String nameStr, Oid nameType)" type="GSSName">
+  Factory method to convert a string name to a GSSName object.
+  
+  **Common name types:**
+  - `GSSName.NT_USER_NAME` - Username format
+  - `GSSName.NT_HOSTBASED_SERVICE` - Service name format (e.g., "service@host")
+  - `GSSName.NT_EXPORT_NAME` - Exported name format
+  
+  **Throws:**
+  - `GSSException` - if the name cannot be created
+</ResponseField>
+
+<ResponseField name="createCredential(GSSName name, int lifetime, Oid mech, int usage)" type="GSSCredential">
+  Factory method for acquiring a single mechanism credential.
+  
+  **Parameters:**
+  - `name` - Principal name (use null for default)
+  - `lifetime` - Lifetime in seconds (use `GSSCredential.DEFAULT_LIFETIME` or `INDEFINITE_LIFETIME`)
+  - `mech` - Mechanism OID (use null for default)
+  - `usage` - `INITIATE_ONLY`, `ACCEPT_ONLY`, or `INITIATE_AND_ACCEPT`
+  
+  **Throws:**
+  - `GSSException` - if credential cannot be acquired
+</ResponseField>
+
+<ResponseField name="createContext(GSSName peer, Oid mech, GSSCredential myCred, int lifetime)" type="GSSContext">
+  Factory method for creating a context on the initiator's side.
+  
+  **Returns:** An unestablished GSSContext
+</ResponseField>
+
+<ResponseField name="createContext(GSSCredential myCred)" type="GSSContext">
+  Factory method for creating a context on the acceptor's side.
+  
+  **Returns:** An unestablished GSSContext
+</ResponseField>
+
+### GSSContext
+
+Encapsulates a GSS-API security context for authentication and secure communication.
+
+<CodeGroup>
+```java Client-Side Context Establishment
+import org.ietf.jgss.*;
+
+public class GSSClient {
+    public static void establishContext(GSSContext context) 
+            throws GSSException {
+        byte[] inToken = new byte[0];
+        byte[] outToken;
+        
+        // Context establishment loop
+        while (!context.isEstablished()) {
+            // Generate token for server
+            outToken = context.initSecContext(inToken, 0, inToken.length);
+            
+            if (outToken != null) {
+                sendTokenToServer(outToken);
+            }
+            
+            if (!context.isEstablished()) {
+                inToken = receiveTokenFromServer();
+            }
+        }
+        
+        // Context is now established
+        System.out.println("Context established!");
+        System.out.println("Initiator: " + context.getSrcName());
+        System.out.println("Acceptor: " + context.getTargName());
+        System.out.println("Lifetime: " + context.getLifetime() + " seconds");
+    }
+    
+    private static void sendTokenToServer(byte[] token) {
+        // Send token to server via network
+    }
+    
+    private static byte[] receiveTokenFromServer() {
+        // Receive token from server via network
+        return new byte[0];
+    }
+}
+```
+
+```java Server-Side Context Establishment
+public class GSSServer {
+    public static void acceptContext(GSSContext context) 
+            throws GSSException {
+        byte[] inToken;
+        byte[] outToken;
+        
+        // Accept context establishment
+        while (!context.isEstablished()) {
+            inToken = receiveTokenFromClient();
+            
+            outToken = context.acceptSecContext(inToken, 0, inToken.length);
+            
+            if (outToken != null) {
+                sendTokenToClient(outToken);
+            }
+        }
+        
+        System.out.println("Context accepted!");
+    }
+    
+    private static byte[] receiveTokenFromClient() {
+        return new byte[0];
+    }
+    
+    private static void sendTokenToClient(byte[] token) {
+    }
+}
+```
+
+```java Secure Message Exchange
+public class SecureMessaging {
+    public static byte[] sendSecureMessage(GSSContext context, 
+                                          byte[] message) 
+            throws GSSException {
+        // Create MessageProp for quality of protection
+        MessageProp msgProp = new MessageProp(0, true); // QOP=0, privacy=true
+        
+        // Wrap (encrypt and sign) the message
+        return context.wrap(message, 0, message.length, msgProp);
+    }
+    
+    public static byte[] receiveSecureMessage(GSSContext context, 
+                                              byte[] wrappedMsg) 
+            throws GSSException {
+        MessageProp msgProp = new MessageProp(0, true);
+        
+        // Unwrap (decrypt and verify) the message
+        byte[] message = context.unwrap(wrappedMsg, 0, 
+                                       wrappedMsg.length, msgProp);
+        
+        // Check message properties
+        System.out.println("Was encrypted: " + msgProp.getPrivacy());
+        System.out.println("Duplicate: " + msgProp.isDuplicateToken());
+        System.out.println("Old token: " + msgProp.isOldToken());
+        
+        return message;
+    }
+}
+```
+</CodeGroup>
+
+<ResponseField name="initSecContext(byte[] inputBuf, int offset, int len)" type="byte[]">
+  Called by the context initiator to start the context creation. Returns a token to send to the peer, or null.
+  
+  **Throws:**
+  - `GSSException` - if context initialization fails
+</ResponseField>
+
+<ResponseField name="acceptSecContext(byte[] inToken, int offset, int len)" type="byte[]">
+  Called by the context acceptor to process a token from the peer. Returns a token to send to the peer, or null.
+  
+  **Throws:**
+  - `GSSException` - if context acceptance fails
+</ResponseField>
+
+<ResponseField name="isEstablished()" type="boolean">
+  Returns true if this is a fully established context and no more tokens are needed from the peer.
+</ResponseField>
+
+<ResponseField name="wrap(byte[] inBuf, int offset, int len, MessageProp msgProp)" type="byte[]">
+  Applies per-message security services (encryption and/or integrity) over the established context.
+  
+  **Parameters:**
+  - `inBuf` - Application data to protect
+  - `offset` - Offset within inBuf where data begins
+  - `len` - Length of data
+  - `msgProp` - MessageProp specifying QOP and privacy requirements
+  
+  **Returns:** Token containing protected message
+  
+  **Throws:**
+  - `GSSException` - if the operation fails
+</ResponseField>
+
+<ResponseField name="unwrap(byte[] inBuf, int offset, int len, MessageProp msgProp)" type="byte[]">
+  Processes tokens generated by wrap() on the other side. Verifies the MIC and decrypts if privacy was applied.
+  
+  **Returns:** The unwrapped message
+  
+  **Throws:**
+  - `GSSException` - if verification or decryption fails
+</ResponseField>
+
+<ResponseField name="getMIC(byte[] inMsg, int offset, int len, MessageProp msgProp)" type="byte[]">
+  Returns a token containing a cryptographic Message Integrity Code (MIC) for the supplied message.
+  
+  **Returns:** Token containing the MIC
+</ResponseField>
+
+<ResponseField name="verifyMIC(byte[] inToken, int tokOffset, int tokLen, byte[] inMsg, int msgOffset, int msgLen, MessageProp msgProp)" type="void">
+  Verifies the cryptographic MIC contained in the token over the supplied message.
+  
+  **Throws:**
+  - `GSSException` - if verification fails
+</ResponseField>
+
+<ResponseField name="dispose()" type="void">
+  Releases system resources and cryptographic information stored in the context.
+</ResponseField>
+
+### Context Configuration Methods
+
+<ResponseField name="requestMutualAuth(boolean state)" type="void">
+  Requests mutual authentication during context establishment. Must be called before initSecContext().
+</ResponseField>
+
+<ResponseField name="requestConf(boolean state)" type="void">
+  Requests confidentiality (encryption) service. Must be called before initSecContext().
+</ResponseField>
+
+<ResponseField name="requestInteg(boolean state)" type="void">
+  Requests integrity protection service. Must be called before initSecContext().
+</ResponseField>
+
+<ResponseField name="requestCredDeleg(boolean state)" type="void">
+  Requests credential delegation. Must be called before initSecContext().
+</ResponseField>
+
+<ResponseField name="requestReplayDet(boolean state)" type="void">
+  Requests replay detection for per-message security services.
+</ResponseField>
+
+<ResponseField name="requestSequenceDet(boolean state)" type="void">
+  Requests sequence checking for per-message security services.
+</ResponseField>
+
+### Query Methods
+
+<ResponseField name="getMutualAuthState()" type="boolean">
+  Returns true if mutual authentication is enabled.
+</ResponseField>
+
+<ResponseField name="getConfState()" type="boolean">
+  Returns true if confidentiality service is available.
+</ResponseField>
+
+<ResponseField name="getIntegState()" type="boolean">
+  Returns true if integrity service is available.
+</ResponseField>
+
+<ResponseField name="getCredDelegState()" type="boolean">
+  Returns true if credentials were delegated.
+</ResponseField>
+
+<ResponseField name="getSrcName()" type="GSSName">
+  Returns the name of the context initiator.
+</ResponseField>
+
+<ResponseField name="getTargName()" type="GSSName">
+  Returns the name of the context acceptor.
+</ResponseField>
+
+<ResponseField name="getLifetime()" type="int">
+  Returns the remaining lifetime of the context in seconds.
+</ResponseField>
+
+### GSSCredential
+
+Encapsulates GSS-API credentials for a principal.
+
+```java GSSCredential Usage
+import org.ietf.jgss.*;
+
+public class CredentialExample {
+    public static void useCredentials() throws GSSException {
+        GSSManager manager = GSSManager.getInstance();
+        
+        // Acquire default credentials
+        GSSCredential cred = manager.createCredential(
+            GSSCredential.INITIATE_ONLY
+        );
+        
+        // Query credential properties
+        System.out.println("Principal: " + cred.getName());
+        System.out.println("Lifetime: " + cred.getRemainingLifetime());
+        System.out.println("Usage: " + cred.getUsage());
+        
+        // Use credential in context
+        GSSContext context = manager.createContext(
+            serverName,
+            krb5Oid,
+            cred,
+            GSSContext.DEFAULT_LIFETIME
+        );
+    }
+}
+```
+
+<ResponseField name="getName()" type="GSSName">
+  Returns the name of the principal associated with this credential.
+</ResponseField>
+
+<ResponseField name="getRemainingLifetime()" type="int">
+  Returns the remaining lifetime in seconds for this credential.
+</ResponseField>
+
+<ResponseField name="getUsage()" type="int">
+  Returns the usage mode for this credential: `INITIATE_ONLY`, `ACCEPT_ONLY`, or `INITIATE_AND_ACCEPT`.
+</ResponseField>
+
+### GSSName
+
+Represents a GSS-API principal entity.
+
+```java GSSName Operations
+public class NameExample {
+    public static void compareNames() throws GSSException {
+        GSSManager manager = GSSManager.getInstance();
+        
+        GSSName name1 = manager.createName("user@REALM", 
+                                          GSSName.NT_USER_NAME);
+        GSSName name2 = manager.createName("user@REALM", 
+                                          GSSName.NT_USER_NAME);
+        
+        // Compare names
+        boolean equal = name1.equals(name2);
+        
+        // Export name for storage/transmission
+        byte[] exportedName = name1.export();
+        
+        // Import exported name
+        GSSName imported = manager.createName(exportedName, 
+                                             GSSName.NT_EXPORT_NAME);
+    }
+}
+```
+
+## Complete Example
+
+<CodeGroup>
+```java Kerberos Client
+import org.ietf.jgss.*;
+
+public class KerberosClient {
+    public static void main(String[] args) {
+        try {
+            GSSManager manager = GSSManager.getInstance();
+            
+            // Create server name (service/host@REALM)
+            GSSName serverName = manager.createName(
+                "service/server.example.com@EXAMPLE.COM",
+                GSSName.NT_HOSTBASED_SERVICE
+            );
+            
+            // Acquire client credentials
+            GSSCredential clientCred = manager.createCredential(
+                null,
+                GSSCredential.DEFAULT_LIFETIME,
+                new Oid("1.2.840.113554.1.2.2"),
+                GSSCredential.INITIATE_ONLY
+            );
+            
+            // Create context
+            GSSContext context = manager.createContext(
+                serverName,
+                new Oid("1.2.840.113554.1.2.2"),
+                clientCred,
+                GSSContext.DEFAULT_LIFETIME
+            );
+            
+            // Request services
+            context.requestMutualAuth(true);
+            context.requestConf(true);
+            context.requestInteg(true);
+            
+            // Establish context
+            byte[] token = context.initSecContext(new byte[0], 0, 0);
+            // ... exchange tokens with server ...
+            
+            // Send encrypted message
+            String message = "Hello, secure world!";
+            MessageProp msgProp = new MessageProp(0, true);
+            byte[] secureMsg = context.wrap(
+                message.getBytes(),
+                0,
+                message.length(),
+                msgProp
+            );
+            
+            // Clean up
+            context.dispose();
+            
+        } catch (GSSException e) {
+            System.err.println("GSS Error: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+```java Kerberos Server
+import org.ietf.jgss.*;
+
+public class KerberosServer {
+    public static void main(String[] args) {
+        try {
+            GSSManager manager = GSSManager.getInstance();
+            
+            // Acquire server credentials
+            GSSCredential serverCred = manager.createCredential(
+                null,
+                GSSCredential.INDEFINITE_LIFETIME,
+                new Oid("1.2.840.113554.1.2.2"),
+                GSSCredential.ACCEPT_ONLY
+            );
+            
+            // Create acceptor context
+            GSSContext context = manager.createContext(serverCred);
+            
+            // Accept context from client
+            byte[] inToken = receiveFromClient();
+            byte[] outToken = context.acceptSecContext(
+                inToken,
+                0,
+                inToken.length
+            );
+            
+            if (outToken != null) {
+                sendToClient(outToken);
+            }
+            
+            // Context established
+            if (context.isEstablished()) {
+                System.out.println("Authenticated client: " + 
+                                 context.getSrcName());
+                
+                // Receive encrypted message
+                byte[] wrappedMsg = receiveFromClient();
+                MessageProp msgProp = new MessageProp(0, true);
+                byte[] message = context.unwrap(
+                    wrappedMsg,
+                    0,
+                    wrappedMsg.length,
+                    msgProp
+                );
+                
+                System.out.println("Received: " + new String(message));
+            }
+            
+            context.dispose();
+            
+        } catch (GSSException e) {
+            System.err.println("GSS Error: " + e.getMessage());
+        }
+    }
+    
+    private static byte[] receiveFromClient() {
+        return new byte[0];
+    }
+    
+    private static void sendToClient(byte[] token) {
+    }
+}
+```
+</CodeGroup>
+
+## MessageProp
+
+Used to specify and retrieve per-message properties.
+
+```java MessageProp Usage
+MessageProp msgProp = new MessageProp(0, true); // QOP=0, privacy=true
+
+// After unwrap/verifyMIC, check properties
+boolean wasEncrypted = msgProp.getPrivacy();
+boolean isDuplicate = msgProp.isDuplicateToken();
+boolean isOld = msgProp.isOldToken();
+boolean isOutOfSequence = msgProp.isUnseqToken();
+boolean hasGap = msgProp.isGapToken();
+int qop = msgProp.getQOP();
+```
+
+## Exception Handling
+
+<Tabs>
+  <Tab title="GSSException">
+    All JGSS methods throw GSSException. Major error codes include:
+    
+    ```java
+    try {
+        context.initSecContext(token, 0, token.length);
+    } catch (GSSException e) {
+        int major = e.getMajor();
+        switch (major) {
+            case GSSException.DEFECTIVE_TOKEN:
+                System.err.println("Invalid token format");
+                break;
+            case GSSException.NO_CRED:
+                System.err.println("No credentials available");
+                break;
+            case GSSException.CREDENTIALS_EXPIRED:
+                System.err.println("Credentials have expired");
+                break;
+            case GSSException.BAD_MIC:
+                System.err.println("Integrity check failed");
+                break;
+            default:
+                System.err.println("GSS Error: " + e.getMessage());
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="Common Error Codes">
+    - `BAD_MECH` - Unsupported mechanism
+    - `BAD_NAME` - Invalid name format
+    - `BAD_NAMETYPE` - Unsupported name type
+    - `NO_CRED` - No credentials available
+    - `CREDENTIALS_EXPIRED` - Credentials have expired
+    - `DEFECTIVE_TOKEN` - Malformed token
+    - `BAD_MIC` - Integrity check failed
+    - `CONTEXT_EXPIRED` - Context has expired
+    - `FAILURE` - General failure
+  </Tab>
+</Tabs>
+
+<Note>
+The default GSSManager instance always supports the Kerberos v5 mechanism (OID: 1.2.840.113554.1.2.2) as defined in RFC 1964.
+</Note>
+
+<Warning>
+**Thread Safety**: GSSContext is NOT thread-safe. Applications should not share a GSSContext among multiple threads without synchronization.
+</Warning>
+
+## See Also
+
+- [java.security Package](/api/java-security) - Core security framework
+- [Cryptography APIs](/api/java-crypto) - Encryption and key management
+- RFC 2743: Generic Security Service API Version 2
+- RFC 2744: Generic Security Service API Version 2: C-bindings
+- RFC 1964: Kerberos Version 5 GSS-API Mechanism

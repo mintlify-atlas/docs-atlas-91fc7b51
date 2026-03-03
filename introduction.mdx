@@ -1,0 +1,85 @@
+---
+title: Introduction to OpenJDK
+description: Welcome to the OpenJDK build documentation. Learn about the open-source Java Development Kit implementation and what you can build.
+---
+
+Welcome to the OpenJDK project! OpenJDK is the open-source reference implementation of the Java Platform, Standard Edition. Building the JDK gives you complete control over your Java runtime environment and allows you to contribute to the evolution of the Java platform.
+
+## What is OpenJDK?
+
+OpenJDK is a complex software project that implements the Java Platform specification. Building it requires technical expertise, a fair number of dependencies, and reasonably powerful hardware. The JDK build process produces:
+
+- A complete Java runtime environment (JRE)
+- Development tools (javac, javadoc, etc.)
+- Native libraries and executables
+- Platform-specific optimizations
+
+The OpenJDK project welcomes contributions from developers worldwide and provides the foundation for numerous commercial and open-source Java distributions.
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Jump right in with a simple guide to build your first JDK
+  </Card>
+  
+  <Card title="Build requirements" icon="list-check" href="/requirements">
+    Understand the hardware, software, and toolchain requirements
+  </Card>
+  
+  <Card title="Running tests" icon="flask" href="/testing">
+    Learn how to test your JDK build with the comprehensive test suite
+  </Card>
+  
+  <Card title="Contributing" icon="code-pull-request" href="/contributing">
+    Join the community and contribute to the Java platform
+  </Card>
+</CardGroup>
+
+## Supported platforms
+
+The mainline JDK project supports multiple operating systems and architectures:
+
+| Operating system | Supported toolchain |
+| ---------------- | ------------------- |
+| Linux | gcc, clang |
+| macOS | Apple Xcode (using clang) |
+| AIX | IBM Open XL C/C++ |
+| Windows | Microsoft Visual Studio |
+
+## Key repositories
+
+The OpenJDK Git site hosts several important repositories:
+
+- **JDK Project** (main-line): `https://git.openjdk.org/jdk` - The actively developed version
+- **JDK Updates Project**: Individual repositories for each update release (e.g., `jdk17u`, `jdk21u`)
+
+<Info>
+  For production use or to build older versions, use the JDK Updates repositories (e.g., `jdk17u`) which contain incremental updates, rather than the frozen GA repositories.
+</Info>
+
+## Build time expectations
+
+Building the JDK is resource-intensive. Here's what to expect:
+
+- **Minimum hardware**: 2-4 CPU cores, 2-4 GB RAM, 6 GB free disk space (x86)
+- **Recommended**: 8+ cores, 8+ GB RAM, SSD storage (aarch64)
+- **Build time**: Varies from minutes on high-end workstations to hours on minimal hardware
+
+<Warning>
+  An SSD is strongly recommended for the build. Disk speed is one of the limiting factors for build performance.
+</Warning>
+
+## Installation vs building
+
+If you just want to use Java and not build it yourself, you can install prebuilt binaries:
+
+- [OpenJDK installation guide](https://openjdk.org/install)
+- [Oracle JDK downloads](https://www.oracle.com/java/technologies/downloads/)
+- [Adoptium builds](https://adoptium.net/)
+
+This documentation is for developers who want to build the JDK from source code.
+
+## Next steps
+
+Ready to build? Head over to the [Quick start guide](/quickstart) to build your first JDK in just a few commands, or explore the detailed build requirements and configuration options.

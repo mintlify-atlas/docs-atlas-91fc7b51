@@ -1,0 +1,488 @@
+---
+title: Coding Standards and Style
+description: Official coding standards and style guidelines for OpenJDK development, including HotSpot C++ conventions
+---
+
+## Overview
+
+Following consistent coding standards makes the OpenJDK codebase easier to read, maintain, and contribute to. This guide covers the coding conventions for HotSpot (C++) and general Java development.
+
+<Note>
+This guide is based on the official [HotSpot Coding Style](https://github.com/openjdk/jdk/blob/master/doc/hotspot-style.md) document, which is the authoritative source for HotSpot development.
+</Note>
+
+## Why Follow Style Guidelines?
+
+Consistent code style provides several benefits:
+
+- **Readability**: Code is easier to understand when it follows familiar patterns
+- **Maintainability**: Consistent style reduces cognitive load when reviewing or modifying code
+- **Collaboration**: A unified style makes it easier for multiple developers to work together
+- **Quality**: Style guidelines often encode best practices that prevent bugs
+
+## HotSpot C++ Style Guide
+
+### Naming Conventions
+
+<Accordion title="Types and Classes">
+  Use mixed-case with capitalized first letter (`FooBar`):
+  
+  ```cpp
+  class ThreadLocalStorage { ... };
+  class GarbageCollector { ... };
+  typedef int32_t jint;
+  ```
+  
+  - Class names should be noun phrases
+  - Use "er" suffix for classes representing actions
+  - Abbreviations are usually fully capitalized (e.g., `HTML` not `Html`)
+</Accordion>
+
+<Accordion title="Functions and Variables">
+  Use lowercase with underscores (`foo_bar`):
+  
+  ```cpp
+  void process_request();
+  int max_value = 100;
+  const char* file_name;
+  ```
+  
+  - Function names should be verb phrases
+  - Boolean functions can start with `is_` or `has_`
+  - Keep names descriptive but concise
+</Accordion>
+
+<Accordion title="Class Data Members">
+  Prefix with underscore, use lowercase with underscores (`_foo_bar`):
+  
+  ```cpp
+  class MyClass {
+    int _counter;
+    bool _is_initialized;
+    void* _data_ptr;
+  };
+  ```
+  
+  - Leading underscore distinguishes members from local variables
+  - Use public accessor functions for external access
+</Accordion>
+
+<Accordion title="Constants">
+  May be upper-case or mixed-case depending on context:
+  
+  ```cpp
+  const int MaxThreads = 256;
+  #define PRODUCT_ONLY(code) code
+  static const size_t DEFAULT_SIZE = 1024;
+  ```
+  
+  - Follow existing patterns in the code area
+  - Ensure constants are visually distinct from variables
+</Accordion>
+
+### Code Structure
+
+#### File Organization
+
+```cpp
+// Include guards
+#ifndef SHARE_VM_RUNTIME_THREAD_HPP
+#define SHARE_VM_RUNTIME_THREAD_HPP
+
+// HotSpot includes (alphabetically sorted)
+#include "memory/allocation.hpp"
+#include "runtime/handles.hpp"
+#include "utilities/globalDefinitions.hpp"
+
+// System includes (separate section)
+#include <vector>
+
+class Thread : public ThreadShadow {
+  // Class definition
+};
+
+#endif // SHARE_VM_RUNTIME_THREAD_HPP
+```
+
+<Note>
+- All source files must have globally unique basenames
+- Keep include lines alphabetically sorted
+- Separate HotSpot and system includes with a blank line
+</Note>
+
+#### Class Design
+
+<Steps>
+  <Step title="Keep Functions Small">
+    Functions should fit on one screen (roughly 50-80 lines):
+    
+    ```cpp
+    // Good: Small, focused function
+    void Thread::initialize() {
+      set_state(INITIALIZED);
+      create_stack();
+      setup_thread_local_storage();
+    }
+    
+    // If larger, split into helper functions
+    void Thread::complex_operation() {
+      prepare_operation();
+      execute_operation();
+      finalize_operation();
+    }
+    ```
+  </Step>
+
+  <Step title="Use Meaningful Names">
+    Avoid categorical nouns and generic verbs:
+    
+    ```cpp
+    // Bad
+    void compute(int param) { ... }
+    int value;
+    
+    // Good
+    void calculate_hash_code(int seed) { ... }
+    int hash_code;
+    ```
+  </Step>
+
+  <Step title="Document Invariants">
+    Use assertions to document and verify class invariants:
+    
+    ```cpp
+    void Thread::set_priority(ThreadPriority priority) {
+      assert(priority >= MinPriority && priority <= MaxPriority,
+             "priority out of range");
+      _priority = priority;
+    }
+    ```
+  </Step>
+</Steps>
+
+### Formatting and Whitespace
+
+#### Indentation and Braces
+
+Use **One-True-Brace-Style** (1TBS):
+
+```cpp
+// Opening brace on same line
+if (condition) {
+  do_something();
+} else {
+  do_something_else();
+}
+
+// Functions: brace can be on same or next line
+void function() {
+  // implementation
+}
+
+// Or for emphasis:
+void important_function()
+{
+  // implementation
+}
+
+// Always use braces, even for single statements
+if (test) {
+  single_statement();
+}
+
+// Exception: very simple one-liners can omit braces
+if (ptr == nullptr) return;
+```
+
+<Warning>
+- **Indentation**: 2 spaces (no tabs)
+- **No tabs**: Set your editor to use spaces
+- Always use braces for substatements (with rare exceptions)
+</Warning>
+
+#### Spacing
+
+```cpp
+// Spaces around operators
+int result = a + b * c;
+if (x == y) { ... }
+
+// Space after control flow keywords
+while (condition) { ... }
+for (int i = 0; i < n; i++) { ... }
+if (test) { ... }
+
+// No space around control expressions
+while (test) { ... }     // Correct
+while ( test ) { ... }   // Wrong
+
+// Parentheses for clarity
+if ((a & b) != 0) { ... }
+int x = (a << 2) | (b & 0xFF);
+```
+
+### C++ Feature Usage
+
+#### Permitted Features
+
+<CodeGroup>
+```cpp Auto Type Deduction
+// Use auto for clarity, not just convenience
+auto it = map.find(key);  // Clear: iterator type obvious
+auto lock = MutexLocker(mutex);  // Clear: RAII pattern
+
+// Avoid when type is important to readability
+int count = get_count();  // Better than: auto count = get_count();
+```
+
+```cpp Lambda Expressions
+// Simple lambdas are encouraged
+array.iterate([&](Element* e) {
+  process(e);
+});
+
+// Use [&] for capture list
+auto filter = [&](const Entry& entry) {
+  return entry.is_valid() && entry.matches(criteria);
+};
+
+// Named lambdas for clarity
+auto comparator = [&](const Item& a, const Item& b) {
+  return a.priority() > b.priority();
+};
+sort(items.begin(), items.end(), comparator);
+```
+
+```cpp Range-based For
+// Cleaner than iterator loops
+for (Thread* thread : thread_list) {
+  thread->update();
+}
+
+for (const auto& entry : hash_map) {
+  process(entry.key(), entry.value());
+}
+```
+</CodeGroup>
+
+#### Forbidden Features
+
+<Warning>
+The following C++ features must **not** be used in HotSpot code:
+
+- **Exceptions**: Build configuration disables exceptions
+- **RTTI**: `dynamic_cast` and `typeid` are disabled
+- **Standard Library** (mostly): Use HotSpot utilities instead
+- **Global operator new/delete**: Use HotSpot memory allocation
+- **Multiple inheritance**: Single inheritance only
+- **Namespaces**: Use "all static" classes instead
+</Warning>
+
+### Memory Management
+
+HotSpot uses custom memory allocation:
+
+```cpp
+// Use HotSpot allocation, not global new/delete
+Thread* thread = new Thread();  // Wrong!
+
+// Use ResourceMark for arena allocation
+ResourceMark rm;
+char* buffer = NEW_RESOURCE_ARRAY(char, size);
+
+// C-heap allocation with NMT support
+char* data = NEW_C_HEAP_ARRAY(char, size, mtInternal);
+FREE_C_HEAP_ARRAY(char, data);
+
+// RAII for automatic cleanup
+ResourceMark rm;
+// Allocations automatically freed when rm goes out of scope
+```
+
+### Error Handling
+
+```cpp
+// Use assert for preconditions and invariants
+assert(ptr != nullptr, "pointer must not be null");
+assert(index >= 0 && index < length, "index out of bounds");
+
+// Use guarantee for critical checks
+guarantee(heap != nullptr, "heap initialization failed");
+
+// Use ShouldNotReachHere for impossible cases
+switch (type) {
+  case TypeA: handle_a(); break;
+  case TypeB: handle_b(); break;
+  default: ShouldNotReachHere();
+}
+
+// Use HotSpot exception mechanism (not C++ exceptions)
+THREAD;
+Handle h = ...;
+if (HAS_PENDING_EXCEPTION) {
+  // Handle error
+  return;
+}
+```
+
+## Java Code Style
+
+### General Conventions
+
+For Java code in the JDK libraries:
+
+```java
+// Class names: PascalCase
+public class ArrayList { ... }
+public interface Comparable { ... }
+
+// Method and variable names: camelCase
+public void calculateHashCode() { ... }
+private int maxSize;
+
+// Constants: UPPER_SNAKE_CASE
+public static final int MAX_VALUE = Integer.MAX_VALUE;
+public static final String DEFAULT_ENCODING = "UTF-8";
+
+// Package names: lowercase
+package java.util.concurrent;
+package javax.swing;
+```
+
+### Documentation
+
+```java
+/**
+ * Returns a hash code value for this object.
+ * <p>
+ * The general contract of {@code hashCode} is:
+ * <ul>
+ * <li>Consistency: multiple invocations return the same value
+ * <li>Equality: equal objects must have equal hash codes
+ * </ul>
+ *
+ * @return a hash code value for this object
+ * @see #equals(Object)
+ */
+@Override
+public int hashCode() {
+    return Objects.hash(field1, field2);
+}
+```
+
+<Accordion title="Javadoc Guidelines">
+  - Document all public APIs
+  - Include `@param`, `@return`, `@throws` as appropriate
+  - Use `{@code}` for code fragments
+  - Reference related methods with `@see`
+  - Explain contracts and invariants
+</Accordion>
+
+## Testing Standards
+
+### Test Naming
+
+```java
+// JTReg test structure
+/*
+ * @test
+ * @bug 8123456
+ * @summary Test String.hashCode with null checks
+ * @run main StringHashCodeTest
+ */
+public class StringHashCodeTest {
+    public static void main(String[] args) {
+        testNormalCase();
+        testEdgeCases();
+    }
+}
+```
+
+### Test Organization
+
+<Note>
+Tests should be:
+- Organized by component in `test/jdk`, `test/hotspot/jtreg`, etc.
+- Tagged with `@bug` for issue tracking
+- Self-contained and reproducible
+- Fast enough for regular testing
+</Note>
+
+## Editor Configuration
+
+### VS Code Settings
+
+```json
+{
+  "editor.insertSpaces": true,
+  "editor.tabSize": 2,
+  "editor.detectIndentation": false,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true
+}
+```
+
+### Vim Settings
+
+```vim
+set expandtab
+set tabstop=2
+set shiftwidth=2
+set softtabstop=2
+```
+
+### Emacs Settings
+
+```elisp
+(setq-default indent-tabs-mode nil)
+(setq c-basic-offset 2)
+(setq tab-width 2)
+```
+
+## Style Checking
+
+### Running Style Checks
+
+The JDK includes tools to check code style:
+
+```bash
+# Check modified files
+make jcheck
+
+# The build system also performs some style validation
+make images
+```
+
+## Best Practices Summary
+
+<Steps>
+  <Step title="Follow Existing Patterns">
+    When modifying existing code, match the surrounding style even if it differs from these guidelines.
+  </Step>
+
+  <Step title="Prioritize Readability">
+    Code is read far more often than written. Make it easy to understand.
+  </Step>
+
+  <Step title="Use Meaningful Names">
+    Names should clearly convey purpose. Avoid abbreviations unless well-known.
+  </Step>
+
+  <Step title="Keep It Simple">
+    Favor simple, straightforward solutions over clever optimizations.
+  </Step>
+
+  <Step title="Document Non-Obvious Code">
+    Add comments for complex algorithms or subtle invariants.
+  </Step>
+</Steps>
+
+## Resources
+
+- [HotSpot Style Guide](https://github.com/openjdk/jdk/blob/master/doc/hotspot-style.md) - Complete C++ style reference
+- [Java Language Specification](https://docs.oracle.com/javase/specs/) - Authoritative Java reference
+- [Google Java Style Guide](https://google.github.io/styleguide/javaguide.html) - Alternative Java conventions
+
+<Note>
+When in doubt, look at existing code in the same area and follow those patterns. Consistency within a component is more important than strict adherence to any single style guide.
+</Note>

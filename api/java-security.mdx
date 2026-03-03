@@ -1,0 +1,391 @@
+---
+title: "java.security Package"
+description: "Core Java security framework providing cryptographic operations, access control, and security provider architecture"
+---
+
+## Overview
+
+The `java.security` package is the core of the Java security architecture, providing classes and interfaces for security-related functionality including:
+
+- **Message Digests**: Cryptographic hash functions (SHA-256, SHA-384, etc.)
+- **Digital Signatures**: Creating and verifying digital signatures
+- **Key Management**: Key generation, storage, and retrieval
+- **Secure Random**: Cryptographically strong random number generation
+- **Access Control**: Security permissions and policy enforcement
+- **Provider Architecture**: Pluggable cryptographic service providers
+
+## Core Classes
+
+### MessageDigest
+
+Provides applications with message digest algorithms (secure one-way hash functions).
+
+<CodeGroup>
+```java MessageDigest Example
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
+public class DigestExample {
+    public static void main(String[] args) throws NoSuchAlgorithmException {
+        // Create a SHA-256 message digest
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        
+        // Update the digest with data
+        String data = "Hello, World!";
+        md.update(data.getBytes());
+        
+        // Complete the hash computation
+        byte[] digest = md.digest();
+        
+        // Print the hash in hexadecimal
+        StringBuilder hexString = new StringBuilder();
+        for (byte b : digest) {
+            String hex = Integer.toHexString(0xff & b);
+            if (hex.length() == 1) hexString.append('0');
+            hexString.append(hex);
+        }
+        System.out.println("SHA-256 Hash: " + hexString.toString());
+    }
+}
+```
+
+```java Cloneable Digest
+// Clone a digest to compute intermediate hashes
+MessageDigest md = MessageDigest.getInstance("SHA-256");
+md.update(chapter1Data);
+
+try {
+    MessageDigest md1 = (MessageDigest) md.clone();
+    byte[] chapter1Digest = md1.digest();
+    
+    // Continue with chapter 2
+    md.update(chapter2Data);
+    byte[] fullDigest = md.digest();
+} catch (CloneNotSupportedException e) {
+    // Handle non-cloneable implementation
+}
+```
+</CodeGroup>
+
+<ResponseField name="getInstance(String algorithm)" type="static MessageDigest">
+  Returns a MessageDigest object that implements the specified algorithm.
+  
+  **Parameters:**
+  - `algorithm` - the name of the algorithm (e.g., "SHA-256", "SHA-384", "SHA-1")
+  
+  **Throws:**
+  - `NoSuchAlgorithmException` - if no provider supports the algorithm
+</ResponseField>
+
+<ResponseField name="update(byte input)" type="void">
+  Updates the digest using the specified byte.
+</ResponseField>
+
+<ResponseField name="update(byte[] input)" type="void">
+  Updates the digest using the specified array of bytes.
+</ResponseField>
+
+<ResponseField name="digest()" type="byte[]">
+  Completes the hash computation and returns the resulting hash value. The digest is reset after this call.
+</ResponseField>
+
+<ResponseField name="digest(byte[] input)" type="byte[]">
+  Performs a final update on the digest using the specified array, then completes the digest computation.
+</ResponseField>
+
+<Note>
+Every Java platform implementation is required to support: **SHA-1**, **SHA-256**, and **SHA-384**
+</Note>
+
+### Signature
+
+Provides the functionality of a digital signature algorithm for authentication and integrity assurance.
+
+<CodeGroup>
+```java Sign Data
+import java.security.*;
+
+public class SignatureExample {
+    public static byte[] signData(PrivateKey privateKey, byte[] data) 
+            throws Exception {
+        // Initialize signature for signing
+        Signature sig = Signature.getInstance("SHA256withRSA");
+        sig.initSign(privateKey);
+        
+        // Update with data to sign
+        sig.update(data);
+        
+        // Generate signature
+        return sig.sign();
+    }
+}
+```
+
+```java Verify Signature
+public static boolean verifySignature(PublicKey publicKey, 
+                                      byte[] data, 
+                                      byte[] signature) throws Exception {
+    // Initialize signature for verification
+    Signature sig = Signature.getInstance("SHA256withRSA");
+    sig.initVerify(publicKey);
+    
+    // Update with data that was signed
+    sig.update(data);
+    
+    // Verify the signature
+    return sig.verify(signature);
+}
+```
+</CodeGroup>
+
+<ResponseField name="getInstance(String algorithm)" type="static Signature">
+  Returns a Signature object that implements the specified signature algorithm.
+  
+  **Standard algorithms include:**
+  - `SHA1withDSA`
+  - `SHA256withDSA`
+  - `SHA256withRSA`
+  - `SHA384withRSA`
+  - `SHA256withECDSA`
+  - `SHA384withECDSA`
+</ResponseField>
+
+<ResponseField name="initSign(PrivateKey privateKey)" type="void">
+  Initializes this signature object for signing.
+  
+  **Throws:**
+  - `InvalidKeyException` - if the key is invalid
+</ResponseField>
+
+<ResponseField name="initVerify(PublicKey publicKey)" type="void">
+  Initializes this signature object for verification.
+  
+  **Throws:**
+  - `InvalidKeyException` - if the key is invalid
+</ResponseField>
+
+<ResponseField name="update(byte[] data)" type="void">
+  Updates the data to be signed or verified.
+</ResponseField>
+
+<ResponseField name="sign()" type="byte[]">
+  Returns the signature bytes of all the data updated. Resets the signature object to its initialized state.
+  
+  **Throws:**
+  - `SignatureException` - if object is not initialized for signing
+</ResponseField>
+
+<ResponseField name="verify(byte[] signature)" type="boolean">
+  Verifies the passed-in signature. Returns true if verified, false otherwise.
+  
+  **Throws:**
+  - `SignatureException` - if object is not initialized for verification
+</ResponseField>
+
+### KeyStore
+
+Represents a storage facility for cryptographic keys and certificates.
+
+<CodeGroup>
+```java Load KeyStore
+import java.security.KeyStore;
+import java.io.FileInputStream;
+
+public class KeyStoreExample {
+    public static KeyStore loadKeyStore(String path, char[] password) 
+            throws Exception {
+        KeyStore ks = KeyStore.getInstance("PKCS12");
+        
+        try (FileInputStream fis = new FileInputStream(path)) {
+            ks.load(fis, password);
+        }
+        
+        return ks;
+    }
+}
+```
+
+```java Store Key and Certificate
+public static void storeKey(KeyStore ks, String alias, 
+                           PrivateKey key, char[] password,
+                           Certificate[] chain) throws Exception {
+    // Store private key with certificate chain
+    ks.setKeyEntry(alias, key, password, chain);
+    
+    // Save keystore to file
+    try (FileOutputStream fos = new FileOutputStream("keystore.p12")) {
+        ks.store(fos, password);
+    }
+}
+```
+
+```java Retrieve Key
+public static Key getKey(KeyStore ks, String alias, char[] password) 
+        throws Exception {
+    return ks.getKey(alias, password);
+}
+```
+</CodeGroup>
+
+<ResponseField name="getInstance(String type)" type="static KeyStore">
+  Returns a KeyStore object of the specified type.
+  
+  **Standard type:** `PKCS12` (required on all Java platforms)
+  
+  **Throws:**
+  - `KeyStoreException` - if no provider supports the specified type
+</ResponseField>
+
+<ResponseField name="load(InputStream stream, char[] password)" type="void">
+  Loads this KeyStore from the given input stream. Pass null for stream to create an empty keystore.
+  
+  **Throws:**
+  - `IOException` - if there is an I/O or format problem
+  - `NoSuchAlgorithmException` - if algorithm for checking integrity cannot be found
+  - `CertificateException` - if certificates cannot be loaded
+</ResponseField>
+
+<ResponseField name="setKeyEntry(String alias, Key key, char[] password, Certificate[] chain)" type="void">
+  Assigns the given key to the given alias, protecting it with the given password.
+  
+  **Throws:**
+  - `KeyStoreException` - if keystore has not been initialized or the operation fails
+</ResponseField>
+
+<ResponseField name="getKey(String alias, char[] password)" type="Key">
+  Returns the key associated with the given alias, using the given password to recover it.
+  
+  **Returns:** The requested key, or null if the alias does not exist or does not identify a key-related entry.
+</ResponseField>
+
+### SecureRandom
+
+Provides a cryptographically strong random number generator (RNG).
+
+<CodeGroup>
+```java Generate Random Bytes
+import java.security.SecureRandom;
+
+public class RandomExample {
+    public static byte[] generateRandomBytes(int length) {
+        SecureRandom random = new SecureRandom();
+        byte[] bytes = new byte[length];
+        random.nextBytes(bytes);
+        return bytes;
+    }
+}
+```
+
+```java Generate Seed
+public static byte[] generateSeed() {
+    SecureRandom random = new SecureRandom();
+    return random.generateSeed(20);
+}
+```
+
+```java Specific Algorithm
+public static SecureRandom getStrongRandom() throws Exception {
+    // Get a strong SecureRandom implementation
+    return SecureRandom.getInstanceStrong();
+}
+```
+</CodeGroup>
+
+<ResponseField name="SecureRandom()" type="constructor">
+  Constructs a secure random number generator (RNG) implementing the default random number algorithm.
+</ResponseField>
+
+<ResponseField name="getInstance(String algorithm)" type="static SecureRandom">
+  Returns a SecureRandom object that implements the specified RNG algorithm.
+  
+  **Throws:**
+  - `NoSuchAlgorithmException` - if no provider supports the specified algorithm
+</ResponseField>
+
+<ResponseField name="nextBytes(byte[] bytes)" type="void">
+  Generates a user-specified number of random bytes.
+</ResponseField>
+
+<ResponseField name="generateSeed(int numBytes)" type="byte[]">
+  Returns the given number of seed bytes, computed using the seed generation algorithm.
+  
+  **Throws:**
+  - `IllegalArgumentException` - if numBytes is negative
+</ResponseField>
+
+<ResponseField name="getInstanceStrong()" type="static SecureRandom">
+  Returns a SecureRandom object that was selected using the algorithms/providers specified in the securerandom.strongAlgorithms Security property.
+  
+  **Throws:**
+  - `NoSuchAlgorithmException` - if no algorithm is available
+</ResponseField>
+
+<Warning>
+SecureRandom objects are thread-safe. Multiple threads can share a single SecureRandom instance.
+</Warning>
+
+## Key Interfaces
+
+### Key
+
+The top-level interface for all cryptographic keys.
+
+<ResponseField name="getAlgorithm()" type="String">
+  Returns the standard algorithm name for this key (e.g., "RSA", "AES", "DSA").
+</ResponseField>
+
+<ResponseField name="getFormat()" type="String">
+  Returns the name of the primary encoding format of this key (e.g., "X.509", "PKCS#8").
+</ResponseField>
+
+<ResponseField name="getEncoded()" type="byte[]">
+  Returns the key in its primary encoding format, or null if the key does not support encoding.
+</ResponseField>
+
+### PublicKey
+
+A public key interface (extends Key). This interface contains no methods or constants.
+
+### PrivateKey
+
+A private key interface (extends Key). This interface contains no methods or constants.
+
+## Provider Architecture
+
+The Java Security API uses a provider-based architecture:
+
+<Tabs>
+  <Tab title="Default Provider">
+    ```java
+    // Uses the default provider
+    MessageDigest md = MessageDigest.getInstance("SHA-256");
+    ```
+  </Tab>
+  <Tab title="Specific Provider">
+    ```java
+    // Uses a specific provider by name
+    MessageDigest md = MessageDigest.getInstance("SHA-256", "SUN");
+    ```
+  </Tab>
+  <Tab title="Provider Instance">
+    ```java
+    // Uses a specific Provider instance
+    Provider provider = Security.getProvider("SUN");
+    MessageDigest md = MessageDigest.getInstance("SHA-256", provider);
+    ```
+  </Tab>
+</Tabs>
+
+## Thread Safety
+
+Most classes in java.security are **NOT** thread-safe unless explicitly stated:
+
+- `SecureRandom` - **Thread-safe**
+- `MessageDigest` - **Not thread-safe** (but can be cloned)
+- `Signature` - **Not thread-safe**
+- `KeyStore` - **Not thread-safe**
+
+## See Also
+
+- [Cryptography APIs](/api/java-crypto) - javax.crypto package for encryption/decryption
+- [JGSS API](/api/jgss) - Java Generic Security Services for authentication

@@ -1,0 +1,233 @@
+---
+title: "java.desktop Module"
+description: "AWT and Swing user interface toolkits, plus APIs for accessibility, audio, imaging, printing, and JavaBeans"
+---
+
+## Overview
+
+The `java.desktop` module defines the AWT and Swing user interface toolkits, plus APIs for accessibility, audio, imaging, printing, and JavaBeans. This module has been part of the Java Platform since Java SE 9 as a modularized component of the desktop APIs.
+
+## Module Declaration
+
+```java
+module java.desktop {
+    requires java.prefs;
+    requires transitive java.datatransfer;
+    requires transitive java.xml;
+    
+    exports java.awt;
+    exports java.awt.color;
+    exports java.awt.desktop;
+    exports java.awt.dnd;
+    exports java.awt.event;
+    exports java.awt.font;
+    exports java.awt.geom;
+    exports java.awt.im;
+    exports java.awt.image;
+    exports java.awt.print;
+    exports java.beans;
+    exports javax.swing;
+    exports javax.swing.border;
+    exports javax.swing.event;
+    exports javax.swing.table;
+    exports javax.swing.tree;
+    // ... and more
+}
+```
+
+## Key Components
+
+The java.desktop module provides comprehensive desktop application development capabilities through several major API groups:
+
+<CardGroup cols={2}>
+  <Card title="AWT (Abstract Window Toolkit)" icon="window" href="/api/awt">
+    Low-level windowing toolkit with graphics, events, and native components
+  </Card>
+  <Card title="Swing" icon="grid" href="/api/swing">
+    Lightweight GUI framework built on top of AWT with rich components
+  </Card>
+  <Card title="Java 2D" icon="palette">
+    Advanced 2D graphics, imaging, and printing capabilities
+  </Card>
+  <Card title="Image I/O" icon="image">
+    Reading and writing images in various formats
+  </Card>
+  <Card title="Accessibility" icon="accessibility">
+    APIs for assistive technologies and accessible applications
+  </Card>
+  <Card title="JavaBeans" icon="cube">
+    Component architecture for reusable software components
+  </Card>
+  <Card title="Sound" icon="volume">
+    Audio playback and MIDI support via javax.sound packages
+  </Card>
+  <Card title="Printing" icon="print">
+    Print service discovery and document printing APIs
+  </Card>
+</CardGroup>
+
+## Core Packages
+
+<Tabs>
+  <Tab title="AWT Packages">
+    ### java.awt
+    Core AWT classes including:
+    - **Component**: Base class for all AWT components
+    - **Container**: Components that can contain other components
+    - **Frame**: Top-level window with title and border
+    - **Graphics/Graphics2D**: Drawing and rendering context
+    - **LayoutManager**: Interface for component layout
+
+    ### java.awt.event
+    Event handling classes:
+    - **ActionListener**: Handles action events from buttons, menus
+    - **MouseListener**: Mouse click and press events
+    - **KeyListener**: Keyboard input events
+    - **WindowListener**: Window state change events
+
+    ### java.awt.geom
+    2D geometry classes:
+    - **Point2D**, **Line2D**, **Rectangle2D**: Basic shapes
+    - **AffineTransform**: Coordinate transformations
+    - **Path2D**: Complex path definitions
+  </Tab>
+  
+  <Tab title="Swing Packages">
+    ### javax.swing
+    Main Swing component library:
+    - **JFrame**: Top-level Swing window
+    - **JPanel**: Generic lightweight container
+    - **JButton**: Push button component
+    - **JLabel**: Display area for text or images
+    - **JTextField**: Single-line text input
+    - **JTable**, **JTree**, **JList**: Complex data views
+
+    ### javax.swing.event
+    Swing-specific events:
+    - **ChangeListener**: State change notifications
+    - **ListSelectionListener**: List selection events
+    - **TreeSelectionListener**: Tree node selection
+
+    ### javax.swing.border
+    Border decorations for components:
+    - **LineBorder**, **EtchedBorder**: Simple borders
+    - **TitledBorder**: Border with title text
+    - **CompoundBorder**: Composite borders
+  </Tab>
+  
+  <Tab title="Other Packages">
+    ### java.awt.image
+    Image processing and buffering:
+    - **BufferedImage**: In-memory image with accessible pixel data
+    - **BufferedImageOp**: Image filtering operations
+    - **ColorModel**: Color representation models
+
+    ### javax.imageio
+    Image reading and writing:
+    - **ImageIO**: Convenience class for common operations
+    - **ImageReader/ImageWriter**: Format-specific I/O
+
+    ### java.beans
+    JavaBeans component model:
+    - **PropertyChangeListener**: Property change notifications
+    - **BeanInfo**: Bean metadata and introspection
+    - **XMLEncoder/XMLDecoder**: Bean persistence
+  </Tab>
+</Tabs>
+
+## Module Dependencies
+
+The java.desktop module has the following dependencies:
+
+<ResponseField name="java.prefs" type="required">
+  Preferences API for storing user and system configuration data
+</ResponseField>
+
+<ResponseField name="java.datatransfer" type="required transitive">
+  Clipboard and drag-and-drop data transfer mechanisms
+</ResponseField>
+
+<ResponseField name="java.xml" type="required transitive">
+  XML processing APIs used by JavaBeans persistence
+</ResponseField>
+
+## Service Provider Interfaces
+
+The module defines several service provider interfaces for extensibility:
+
+```java
+uses java.awt.im.spi.InputMethodDescriptor;
+uses javax.accessibility.AccessibilityProvider;
+uses javax.imageio.spi.ImageReaderSpi;
+uses javax.imageio.spi.ImageWriterSpi;
+uses javax.print.PrintServiceLookup;
+uses javax.sound.midi.spi.MidiDeviceProvider;
+uses javax.sound.sampled.spi.AudioFileReader;
+```
+
+## Usage Example
+
+Basic desktop application using java.desktop APIs:
+
+```java
+import java.awt.*;
+import javax.swing.*;
+
+public class DesktopExample {
+    public static void main(String[] args) {
+        // Create application window
+        SwingUtilities.invokeLater(() -> {
+            JFrame frame = new JFrame("Desktop API Example");
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            frame.setSize(400, 300);
+            
+            // Create panel with components
+            JPanel panel = new JPanel(new BorderLayout());
+            panel.add(new JLabel("Hello from java.desktop!"), 
+                     BorderLayout.NORTH);
+            
+            JButton button = new JButton("Click Me");
+            button.addActionListener(e -> 
+                JOptionPane.showMessageDialog(frame, "Button clicked!"));
+            panel.add(button, BorderLayout.CENTER);
+            
+            frame.setContentPane(panel);
+            frame.setVisible(true);
+        });
+    }
+}
+```
+
+## Threading Considerations
+
+<Warning>
+  Swing is not thread-safe. All GUI operations must be performed on the Event Dispatch Thread (EDT). Use `SwingUtilities.invokeLater()` or `SwingUtilities.invokeAndWait()` to execute code on the EDT from other threads.
+</Warning>
+
+```java
+// Correct: Update UI from background thread
+new Thread(() -> {
+    // Perform background work
+    String result = doBackgroundWork();
+    
+    // Update UI on EDT
+    SwingUtilities.invokeLater(() -> {
+        label.setText(result);
+    });
+}).start();
+```
+
+## Platform Integration
+
+The module provides platform-specific integrations:
+
+- **Desktop class**: Integration with native desktop features (open files, browse URLs)
+- **SystemTray**: Access to system tray/notification area
+- **Taskbar**: Platform-specific taskbar operations
+- **SplashScreen**: Native splash screen support
+
+## See Also
+
+- [AWT API Reference](/api/awt)
+- [Swing API Reference](/api/swing)
+- [Java Tutorial - Creating a GUI with Swing](https://docs.oracle.com/javase/tutorial/uiswing/)

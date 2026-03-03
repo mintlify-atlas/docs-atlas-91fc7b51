@@ -1,0 +1,674 @@
+---
+title: "java.io Package"
+description: "System input/output through data streams, serialization, and file system operations"
+---
+
+## Overview
+
+The `java.io` package provides system input and output through data streams, serialization, and the file system. It contains classes for reading and writing data to files, network connections, and other I/O sources.
+
+## Stream Hierarchy
+
+```java
+Byte Streams (binary data)
+├── InputStream (abstract)
+│   ├── FileInputStream
+│   ├── ByteArrayInputStream
+│   ├── BufferedInputStream
+│   ├── DataInputStream
+│   └── ObjectInputStream
+└── OutputStream (abstract)
+    ├── FileOutputStream
+    ├── ByteArrayOutputStream
+    ├── BufferedOutputStream
+    ├── DataOutputStream
+    └── ObjectOutputStream
+
+Character Streams (text data)
+├── Reader (abstract)
+│   ├── FileReader
+│   ├── BufferedReader
+│   ├── InputStreamReader
+│   └── StringReader
+└── Writer (abstract)
+    ├── FileWriter
+    ├── BufferedWriter
+    ├── OutputStreamWriter
+    ├── PrintWriter
+    └── StringWriter
+```
+
+## Core Abstract Classes
+
+### InputStream
+
+Abstract superclass for all byte input streams.
+
+```java
+public abstract class InputStream implements Closeable
+```
+
+<Accordion title="InputStream Methods">
+  <ResponseField name="read()" type="int">
+    Reads the next byte of data. Returns -1 if end of stream is reached.
+    
+    ```java
+    InputStream in = new FileInputStream("file.bin");
+    int b;
+    while ((b = in.read()) != -1) {
+        // Process byte
+    }
+    in.close();
+    ```
+  </ResponseField>
+  
+  <ResponseField name="read(byte[] b)" type="int">
+    Reads bytes into an array. Returns the number of bytes read, or -1 if end of stream.
+    
+    ```java
+    byte[] buffer = new byte[1024];
+    int bytesRead = in.read(buffer);
+    ```
+  </ResponseField>
+  
+  <ResponseField name="read(byte[] b, int off, int len)" type="int">
+    Reads up to len bytes into array b starting at offset off.
+  </ResponseField>
+  
+  <ResponseField name="readAllBytes()" type="byte[]">
+    Reads all remaining bytes from the input stream (Java 9+).
+    
+    ```java
+    byte[] allBytes = in.readAllBytes();
+    ```
+  </ResponseField>
+  
+  <ResponseField name="skip(long n)" type="long">
+    Skips over and discards n bytes of data.
+  </ResponseField>
+  
+  <ResponseField name="available()" type="int">
+    Returns an estimate of the number of bytes that can be read without blocking.
+  </ResponseField>
+  
+  <ResponseField name="close()" type="void">
+    Closes the stream and releases any system resources associated with it.
+  </ResponseField>
+  
+  <ResponseField name="nullInputStream()" type="InputStream">
+    Returns an InputStream that reads no bytes (Java 11+).
+    
+    ```java
+    InputStream empty = InputStream.nullInputStream();
+    ```
+  </ResponseField>
+</Accordion>
+
+### OutputStream
+
+Abstract superclass for all byte output streams.
+
+```java
+public abstract class OutputStream implements Closeable, Flushable
+```
+
+<Accordion title="OutputStream Methods">
+  <ResponseField name="write(int b)" type="void">
+    Writes the specified byte to the output stream.
+    
+    ```java
+    OutputStream out = new FileOutputStream("output.bin");
+    out.write(65); // Writes byte 'A'
+    out.close();
+    ```
+  </ResponseField>
+  
+  <ResponseField name="write(byte[] b)" type="void">
+    Writes all bytes from the array to the output stream.
+    
+    ```java
+    byte[] data = "Hello".getBytes();
+    out.write(data);
+    ```
+  </ResponseField>
+  
+  <ResponseField name="write(byte[] b, int off, int len)" type="void">
+    Writes len bytes from array b starting at offset off.
+  </ResponseField>
+  
+  <ResponseField name="flush()" type="void">
+    Flushes the stream, forcing any buffered output bytes to be written.
+  </ResponseField>
+  
+  <ResponseField name="close()" type="void">
+    Closes the stream and releases resources. Automatically flushes before closing.
+  </ResponseField>
+  
+  <ResponseField name="nullOutputStream()" type="OutputStream">
+    Returns an OutputStream that discards all bytes (Java 11+).
+  </ResponseField>
+</Accordion>
+
+### Reader
+
+Abstract superclass for character input streams.
+
+```java
+public abstract class Reader implements Readable, Closeable
+```
+
+<Accordion title="Reader Methods">
+  <ResponseField name="read()" type="int">
+    Reads a single character. Returns -1 if end of stream.
+  </ResponseField>
+  
+  <ResponseField name="read(char[] cbuf)" type="int">
+    Reads characters into an array.
+  </ResponseField>
+  
+  <ResponseField name="read(CharBuffer target)" type="int">
+    Reads characters into a CharBuffer.
+  </ResponseField>
+  
+  <ResponseField name="ready()" type="boolean">
+    Returns true if the next read() is guaranteed not to block.
+  </ResponseField>
+  
+  <ResponseField name="skip(long n)" type="long">
+    Skips n characters.
+  </ResponseField>
+  
+  <ResponseField name="close()" type="void">
+    Closes the stream.
+  </ResponseField>
+</Accordion>
+
+### Writer
+
+Abstract superclass for character output streams.
+
+```java
+public abstract class Writer implements Appendable, Closeable, Flushable
+```
+
+<Accordion title="Writer Methods">
+  <ResponseField name="write(int c)" type="void">
+    Writes a single character.
+  </ResponseField>
+  
+  <ResponseField name="write(char[] cbuf)" type="void">
+    Writes an array of characters.
+  </ResponseField>
+  
+  <ResponseField name="write(String str)" type="void">
+    Writes a string.
+  </ResponseField>
+  
+  <ResponseField name="append(CharSequence csq)" type="Writer">
+    Appends a character sequence.
+  </ResponseField>
+  
+  <ResponseField name="flush()" type="void">
+    Flushes the stream.
+  </ResponseField>
+  
+  <ResponseField name="close()" type="void">
+    Closes the stream.
+  </ResponseField>
+</Accordion>
+
+## File I/O Classes
+
+### File
+
+Abstract representation of file and directory pathnames.
+
+```java
+public class File implements Serializable, Comparable<File>
+```
+
+<Accordion title="File Class Details">
+  The File class provides methods to:
+  - Create, delete, and rename files and directories
+  - Query file properties (size, permissions, timestamps)
+  - List directory contents
+  - Navigate file system hierarchy
+  
+  ```java
+  // Creating File objects
+  File file1 = new File("/path/to/file.txt");
+  File file2 = new File("/path/to", "file.txt");
+  File file3 = new File(parentDir, "file.txt");
+  
+  // File properties
+  boolean exists = file1.exists();
+  boolean isFile = file1.isFile();
+  boolean isDir = file1.isDirectory();
+  long size = file1.length();              // Size in bytes
+  long modified = file1.lastModified();    // Timestamp
+  
+  // File operations
+  boolean created = file1.createNewFile(); // Create if doesn't exist
+  boolean deleted = file1.delete();        // Delete file
+  boolean renamed = file1.renameTo(new File("new-name.txt"));
+  
+  // Directory operations
+  File dir = new File("/path/to/dir");
+  boolean dirCreated = dir.mkdir();        // Create single directory
+  boolean dirsCreated = dir.mkdirs();      // Create including parents
+  
+  // List directory contents
+  String[] names = dir.list();             // File names
+  File[] files = dir.listFiles();          // File objects
+  
+  // File filters
+  File[] txtFiles = dir.listFiles((d, name) -> name.endsWith(".txt"));
+  
+  // Path operations
+  String name = file1.getName();           // "file.txt"
+  String path = file1.getPath();           // "/path/to/file.txt"
+  String absPath = file1.getAbsolutePath();
+  File parent = file1.getParentFile();
+  
+  // Permissions
+  boolean canRead = file1.canRead();
+  boolean canWrite = file1.canWrite();
+  boolean canExecute = file1.canExecute();
+  file1.setReadable(true);
+  file1.setWritable(true);
+  file1.setExecutable(true);
+  
+  // Platform-specific
+  char separator = File.separatorChar;      // '/' or '\\'
+  String separatorStr = File.separator;
+  ```
+  
+  <Note>
+    For new code, consider using the modern `java.nio.file.Path` and `Files` API (Java 7+) which provides more functionality and better error handling.
+  </Note>
+</Accordion>
+
+### FileInputStream & FileOutputStream
+
+<Tabs>
+  <Tab title="FileInputStream">
+    Reads bytes from a file in the file system.
+    
+    ```java
+    // Reading a file
+    try (FileInputStream fis = new FileInputStream("input.bin")) {
+        int data;
+        while ((data = fis.read()) != -1) {
+            // Process byte
+        }
+    } catch (IOException e) {
+        e.printStackTrace();
+    }
+    
+    // Reading into buffer
+    try (FileInputStream fis = new FileInputStream("input.bin")) {
+        byte[] buffer = new byte[1024];
+        int bytesRead;
+        while ((bytesRead = fis.read(buffer)) != -1) {
+            // Process buffer[0..bytesRead-1]
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="FileOutputStream">
+    Writes bytes to a file in the file system.
+    
+    ```java
+    // Writing to a file (overwrites existing)
+    try (FileOutputStream fos = new FileOutputStream("output.bin")) {
+        fos.write("Hello".getBytes());
+    } catch (IOException e) {
+        e.printStackTrace();
+    }
+    
+    // Appending to a file
+    try (FileOutputStream fos = new FileOutputStream("output.bin", true)) {
+        fos.write("More data".getBytes());
+    }
+    
+    // Writing byte array
+    byte[] data = {1, 2, 3, 4, 5};
+    try (FileOutputStream fos = new FileOutputStream("data.bin")) {
+        fos.write(data);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### FileReader & FileWriter
+
+<Tabs>
+  <Tab title="FileReader">
+    Convenience class for reading character files using default character encoding.
+    
+    ```java
+    // Reading a text file
+    try (FileReader reader = new FileReader("input.txt")) {
+        int ch;
+        while ((ch = reader.read()) != -1) {
+            System.out.print((char) ch);
+        }
+    }
+    
+    // With specific encoding (Java 11+)
+    try (FileReader reader = new FileReader("input.txt", 
+                                            StandardCharsets.UTF_8)) {
+        // Read file
+    }
+    ```
+  </Tab>
+  
+  <Tab title="FileWriter">
+    Convenience class for writing character files.
+    
+    ```java
+    // Writing to a text file
+    try (FileWriter writer = new FileWriter("output.txt")) {
+        writer.write("Hello, World!\n");
+        writer.write("Second line\n");
+    }
+    
+    // Appending
+    try (FileWriter writer = new FileWriter("output.txt", true)) {
+        writer.write("Appended text\n");
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Buffered Streams
+
+Buffered streams improve I/O performance by reducing the number of system calls.
+
+### BufferedInputStream & BufferedOutputStream
+
+```java
+// Buffered binary reading
+try (BufferedInputStream bis = new BufferedInputStream(
+        new FileInputStream("large-file.bin"))) {
+    byte[] buffer = new byte[8192];
+    int bytesRead;
+    while ((bytesRead = bis.read(buffer)) != -1) {
+        // Process buffer
+    }
+}
+
+// Buffered binary writing
+try (BufferedOutputStream bos = new BufferedOutputStream(
+        new FileOutputStream("output.bin"))) {
+    bos.write(data);
+    // No need to manually flush, try-with-resources handles it
+}
+```
+
+### BufferedReader & BufferedWriter
+
+<Accordion title="BufferedReader">
+  BufferedReader reads text from a character-input stream, buffering characters for efficient reading.
+  
+  ```java
+  // Reading lines from a file
+  try (BufferedReader reader = new BufferedReader(
+          new FileReader("input.txt"))) {
+      String line;
+      while ((line = reader.readLine()) != null) {
+          System.out.println(line);
+      }
+  }
+  
+  // Using streams (Java 8+)
+  try (BufferedReader reader = new BufferedReader(
+          new FileReader("input.txt"))) {
+      reader.lines()
+            .filter(line -> line.contains("important"))
+            .forEach(System.out::println);
+  }
+  
+  // Reading from standard input
+  BufferedReader stdin = new BufferedReader(
+      new InputStreamReader(System.in));
+  System.out.print("Enter name: ");
+  String name = stdin.readLine();
+  ```
+</Accordion>
+
+<Accordion title="BufferedWriter">
+  BufferedWriter writes text to a character-output stream, buffering characters for efficient writing.
+  
+  ```java
+  // Writing lines to a file
+  try (BufferedWriter writer = new BufferedWriter(
+          new FileWriter("output.txt"))) {
+      writer.write("First line");
+      writer.newLine();
+      writer.write("Second line");
+      writer.newLine();
+  }
+  
+  // Writing multiple lines
+  List<String> lines = Arrays.asList("Line 1", "Line 2", "Line 3");
+  try (BufferedWriter writer = new BufferedWriter(
+          new FileWriter("output.txt"))) {
+      for (String line : lines) {
+          writer.write(line);
+          writer.newLine();
+      }
+  }
+  ```
+</Accordion>
+
+### PrintWriter
+
+Convenience class for printing formatted text to a stream.
+
+```java
+// PrintWriter with automatic flushing
+try (PrintWriter out = new PrintWriter(
+        new FileWriter("output.txt"))) {
+    out.println("Hello, World!");
+    out.printf("Number: %d, Float: %.2f%n", 42, 3.14159);
+    out.print("No newline");
+    
+    // Check for errors
+    if (out.checkError()) {
+        System.err.println("Error writing to file");
+    }
+}
+
+// PrintWriter to System.out
+PrintWriter console = new PrintWriter(System.out, true); // auto-flush
+console.println("Console output");
+```
+
+## Data Streams
+
+### DataInputStream & DataOutputStream
+
+Read and write primitive Java data types in a portable way.
+
+<Tabs>
+  <Tab title="DataOutputStream">
+    ```java
+    // Writing primitive types
+    try (DataOutputStream dos = new DataOutputStream(
+            new FileOutputStream("data.bin"))) {
+        dos.writeInt(42);
+        dos.writeDouble(3.14159);
+        dos.writeBoolean(true);
+        dos.writeUTF("Hello, World!"); // Modified UTF-8
+        dos.writeLong(123456789L);
+    }
+    ```
+  </Tab>
+  
+  <Tab title="DataInputStream">
+    ```java
+    // Reading primitive types (must match write order)
+    try (DataInputStream dis = new DataInputStream(
+            new FileInputStream("data.bin"))) {
+        int intValue = dis.readInt();
+        double doubleValue = dis.readDouble();
+        boolean boolValue = dis.readBoolean();
+        String stringValue = dis.readUTF();
+        long longValue = dis.readLong();
+        
+        System.out.println("int: " + intValue);
+        System.out.println("double: " + doubleValue);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Object Serialization
+
+### ObjectOutputStream & ObjectInputStream
+
+Serialize and deserialize Java objects.
+
+<Accordion title="Object Serialization">
+  ```java
+  // Serializable class
+  class Person implements Serializable {
+      private static final long serialVersionUID = 1L;
+      private String name;
+      private int age;
+      private transient String password; // Not serialized
+      
+      public Person(String name, int age) {
+          this.name = name;
+          this.age = age;
+      }
+      
+      // Getters and setters...
+  }
+  
+  // Writing objects
+  Person person = new Person("Alice", 30);
+  try (ObjectOutputStream oos = new ObjectOutputStream(
+          new FileOutputStream("person.ser"))) {
+      oos.writeObject(person);
+  }
+  
+  // Reading objects
+  try (ObjectInputStream ois = new ObjectInputStream(
+          new FileInputStream("person.ser"))) {
+      Person restored = (Person) ois.readObject();
+      System.out.println("Name: " + restored.getName());
+  } catch (ClassNotFoundException e) {
+      e.printStackTrace();
+  }
+  
+  // Writing multiple objects
+  try (ObjectOutputStream oos = new ObjectOutputStream(
+          new FileOutputStream("people.ser"))) {
+      oos.writeObject(person1);
+      oos.writeObject(person2);
+      oos.writeObject(person3);
+  }
+  ```
+  
+  <Note>
+    Classes must implement `Serializable` interface. Use `serialVersionUID` to control version compatibility.
+  </Note>
+</Accordion>
+
+## RandomAccessFile
+
+Provides random access to file contents (both reading and writing).
+
+```java
+try (RandomAccessFile raf = new RandomAccessFile("data.bin", "rw")) {
+    // Write at current position
+    raf.writeInt(42);
+    raf.writeDouble(3.14159);
+    
+    // Get current position
+    long position = raf.getFilePointer();
+    
+    // Seek to specific position
+    raf.seek(0);  // Go to beginning
+    
+    // Read from current position
+    int value = raf.readInt();
+    double pi = raf.readDouble();
+    
+    // Get file length
+    long length = raf.length();
+    
+    // Set file length (truncate or extend)
+    raf.setLength(1024);
+}
+```
+
+## Complete Example
+
+```java
+import java.io.*;
+import java.util.*;
+
+public class FileIOExample {
+    // Copy a file using byte streams
+    public static void copyFile(String source, String dest) throws IOException {
+        try (InputStream in = new BufferedInputStream(
+                new FileInputStream(source));
+             OutputStream out = new BufferedOutputStream(
+                new FileOutputStream(dest))) {
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = in.read(buffer)) != -1) {
+                out.write(buffer, 0, bytesRead);
+            }
+        }
+    }
+    
+    // Read all lines from a text file
+    public static List<String> readAllLines(String filename) 
+            throws IOException {
+        List<String> lines = new ArrayList<>();
+        try (BufferedReader reader = new BufferedReader(
+                new FileReader(filename))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                lines.add(line);
+            }
+        }
+        return lines;
+    }
+    
+    // Write lines to a text file
+    public static void writeLines(String filename, List<String> lines) 
+            throws IOException {
+        try (PrintWriter writer = new PrintWriter(
+                new BufferedWriter(new FileWriter(filename)))) {
+            for (String line : lines) {
+                writer.println(line);
+            }
+        }
+    }
+    
+    // Process large file line by line
+    public static void processLargeFile(String filename) throws IOException {
+        try (BufferedReader reader = new BufferedReader(
+                new FileReader(filename))) {
+            reader.lines()
+                  .filter(line -> !line.isEmpty())
+                  .map(String::toUpperCase)
+                  .forEach(System.out::println);
+        }
+    }
+}
+```
+
+<Warning>
+  Always use try-with-resources when working with I/O streams to ensure proper resource cleanup, even if exceptions occur.
+</Warning>
+
+<Note>
+  For modern file operations, consider using the `java.nio.file` package (Files, Paths) which provides a more powerful and easier-to-use API.
+</Note>

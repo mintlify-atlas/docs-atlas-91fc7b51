@@ -1,0 +1,159 @@
+---
+title: JDK Development Tools Overview
+description: Comprehensive guide to the essential development tools included with the OpenJDK
+---
+
+The OpenJDK provides a comprehensive suite of development tools for compiling, linking, packaging, and diagnosing Java applications. These tools are essential for building and maintaining Java applications.
+
+## Compiler Tools
+
+### javac - Java Compiler
+The Java programming language compiler, located in the `jdk.compiler` module. javac reads Java source files and compiles them into bytecode class files.
+
+**Key Features:**
+- Supports all Java language features and versions
+- Module system support with `--module-path` and `--add-modules`
+- Annotation processing with `-processor`
+- Extensive lint warnings with `-Xlint`
+- Integration with Java Platform Module System (JPMS)
+
+[Learn more about javac](/tools/javac)
+
+## Linking and Packaging Tools
+
+### jlink - Java Linker
+Creates custom runtime images by assembling and optimizing a set of modules and their dependencies. Part of the `jdk.jlink` module.
+
+**Key Features:**
+- Creates minimal runtime images with only required modules
+- Plugin architecture for image optimization
+- Platform-specific image generation
+- Launcher script generation
+
+[Learn more about jlink](/tools/jlink)
+
+### jpackage - Java Packaging Tool
+Packages Java applications into native installers for various platforms. Located in the `jdk.jpackage` module.
+
+**Key Features:**
+- Creates platform-specific installers (MSI, DEB, RPM, DMG, PKG)
+- Application image bundling
+- Runtime inclusion
+- Icon and metadata customization
+
+[Learn more about jpackage](/tools/jpackage)
+
+## Diagnostic Tools
+
+### jcmd - JVM Diagnostic Command Tool
+Sends diagnostic command requests to running Java Virtual Machine processes. Part of the `jdk.jcmd` module.
+
+**Key Features:**
+- Attach to running JVM processes
+- Execute diagnostic commands
+- Performance counter inspection
+- Thread dumps and heap analysis
+
+[Learn more about jcmd](/tools/jcmd)
+
+## Tool Organization
+
+All JDK tools are organized into modules following the Java Platform Module System:
+
+<Tabs>
+  <Tab title="Compiler Module">
+    **jdk.compiler**
+    
+    Contains the Java compiler implementation:
+    - `com.sun.tools.javac.Main` - Main entry point
+    - `com.sun.tools.javac.main.Option` - Command-line options
+    - `com.sun.tools.javac.main.JavaCompiler` - Core compiler logic
+  </Tab>
+  
+  <Tab title="Linking Module">
+    **jdk.jlink**
+    
+    Contains the linking tool implementation:
+    - `jdk.tools.jlink.internal.JlinkTask` - Main task implementation
+    - `jdk.tools.jlink.plugin` - Plugin API
+    - `jdk.tools.jlink.builder` - Image builder components
+  </Tab>
+  
+  <Tab title="Packaging Module">
+    **jdk.jpackage**
+    
+    Contains the packaging tool implementation:
+    - `jdk.jpackage.main.Main` - Entry point
+    - `jdk.jpackage.internal.cli` - CLI handling
+    - Platform-specific bundlers for Linux, macOS, Windows
+  </Tab>
+  
+  <Tab title="Diagnostic Module">
+    **jdk.jcmd**
+    
+    Contains diagnostic tools:
+    - `sun.tools.jcmd.JCmd` - Main jcmd tool
+    - `sun.tools.jinfo.JInfo` - Configuration info tool
+    - `sun.tools.jmap.JMap` - Memory map tool
+    - `sun.tools.jstack.JStack` - Stack trace tool
+  </Tab>
+</Tabs>
+
+## Common Usage Patterns
+
+### Build Pipeline
+
+A typical Java application build pipeline uses these tools in sequence:
+
+```bash
+# 1. Compile source code
+javac -d build/classes --module-source-path src $(find src -name '*.java')
+
+# 2. Create custom runtime image
+jlink --module-path $JAVA_HOME/jmods:build/classes \
+      --add-modules myapp \
+      --output myapp-runtime
+
+# 3. Package as native installer
+jpackage --type deb \
+         --app-version 1.0 \
+         --runtime-image myapp-runtime \
+         --name MyApp
+```
+
+### Diagnostic Workflow
+
+```bash
+# List running Java processes
+jcmd -l
+
+# Get VM info for specific process
+jcmd <pid> VM.version
+
+# Generate thread dump
+jcmd <pid> Thread.print
+
+# Check performance counters
+jcmd <pid> PerfCounter.print
+```
+
+## Source Code Locations
+
+All tool implementations are located in `src/` directory:
+
+- **javac**: `src/jdk.compiler/share/classes/com/sun/tools/javac/`
+- **jlink**: `src/jdk.jlink/share/classes/jdk/tools/jlink/`
+- **jpackage**: `src/jdk.jpackage/share/classes/jdk/jpackage/`
+- **jcmd**: `src/jdk.jcmd/share/classes/sun/tools/jcmd/`
+
+<Note>
+All tools support the `--help` or `-h` option to display usage information and available commands.
+</Note>
+
+## Next Steps
+
+Explore detailed documentation for each tool:
+- [javac - Java Compiler](/tools/javac)
+- [jlink - Java Linker](/tools/jlink)
+- [jpackage - Packaging Tool](/tools/jpackage)
+- [jcmd - Diagnostic Tool](/tools/jcmd)

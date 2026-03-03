@@ -1,0 +1,291 @@
+---
+title: Contributing to OpenJDK
+description: Guide to contributing code, submitting patches, and participating in the OpenJDK community
+---
+
+## Overview
+
+OpenJDK welcomes contributions from developers worldwide. Whether you're fixing bugs, adding features, or improving documentation, this guide will help you get started with the contribution process.
+
+For comprehensive information, refer to the [OpenJDK Developers' Guide](https://openjdk.org/guide/).
+
+## Getting Started
+
+<Steps>
+  <Step title="Join the Community">
+    Subscribe to relevant mailing lists for the areas you're interested in:
+    - [discuss@openjdk.org](mailto:discuss@openjdk.org) - General discussions
+    - [hotspot-dev@openjdk.org](mailto:hotspot-dev@openjdk.org) - HotSpot VM development
+    - Component-specific lists for focused discussions
+  </Step>
+
+  <Step title="Set Up Your Development Environment">
+    Clone the OpenJDK repository and configure your build environment:
+    
+    ```bash
+    git clone https://git.openjdk.org/jdk
+    cd jdk
+    bash configure
+    make images
+    ```
+    
+    See the [Building Guide](/building/overview) for detailed build instructions.
+  </Step>
+
+  <Step title="Find an Issue">
+    Browse the [JDK Bug System](https://bugs.openjdk.org) to find issues to work on:
+    - Look for issues labeled "good first issue" for newcomers
+    - Check component-specific areas that match your interests
+    - Consider starting with documentation or test improvements
+  </Step>
+
+  <Step title="Sign the OCA">
+    Before contributing code, you must sign the [Oracle Contributor Agreement (OCA)](https://oca.opensource.oracle.com/).
+    This is required for all non-trivial contributions.
+  </Step>
+</Steps>
+
+## Development Workflow
+
+### Creating a Branch
+
+Create a new branch for your changes:
+
+```bash
+git checkout -b fix-jdk-12345
+```
+
+Use descriptive branch names that reference the issue number when applicable.
+
+### Making Changes
+
+<Accordion title="Code Changes">
+  - Follow the [coding standards](/development/code-style)
+  - Write clear, maintainable code
+  - Add appropriate comments for complex logic
+  - Ensure backward compatibility when possible
+</Accordion>
+
+<Accordion title="Adding Tests">
+  All functional changes should include tests:
+  - JTReg tests for Java-level functionality
+  - GTest for native HotSpot code
+  - Ensure tests are reproducible and stable
+  
+  See [Testing Guide](/development/testing) for details.
+</Accordion>
+
+<Accordion title="Documentation">
+  Update documentation as needed:
+  - API documentation (javadoc)
+  - Man pages for command-line tools
+  - Release notes for user-visible changes
+</Accordion>
+
+### Running Tests
+
+Before submitting changes, run relevant tests:
+
+```bash
+# Run tier1 tests (required minimum)
+make test-tier1
+
+# Run specific component tests
+make test TEST=jdk_lang
+make test TEST=hotspot_gc
+```
+
+<Note>
+Tier1 tests are the minimum requirement. For significant changes, run tier2 and tier3 tests as well.
+</Note>
+
+## Submitting Changes
+
+### Commit Guidelines
+
+<Steps>
+  <Step title="Stage Your Changes">
+    ```bash
+    git add <files>
+    git status
+    ```
+  </Step>
+
+  <Step title="Create a Commit">
+    Write a clear commit message:
+    
+    ```bash
+    git commit -m "8123456: Fix NullPointerException in String.hashCode
+    
+    Added null check before accessing String value array.
+    Updated tests to cover null input scenarios.
+    
+    Reviewed-by: username"
+    ```
+    
+    Commit messages should:
+    - Start with the bug number (if applicable)
+    - Have a concise first line (summary)
+    - Include detailed explanation if needed
+    - Reference reviewers when approved
+  </Step>
+
+  <Step title="Push to Your Fork">
+    ```bash
+    git push -u origin fix-jdk-12345
+    ```
+  </Step>
+</Steps>
+
+### Creating a Pull Request
+
+OpenJDK uses GitHub pull requests for code review:
+
+<CodeGroup>
+```bash GitHub CLI
+# Create PR using gh command
+gh pr create --title "8123456: Fix NullPointerException in String.hashCode" \
+  --body "## Summary
+  - Added null check before accessing value array
+  - Updated tests for null input coverage
+  
+  ## Testing
+  - tier1, tier2 tests passing
+  - New test cases added"
+```
+
+```bash Web Interface
+# Or create via GitHub web interface
+# Navigate to https://github.com/openjdk/jdk
+# Click "New Pull Request"
+# Select your fork and branch
+```
+</CodeGroup>
+
+<Warning>
+Ensure your PR includes:
+- Clear description of the problem and solution
+- Test results showing tier1 (minimum) passes
+- Reference to the JBS issue number
+- Updates to relevant documentation
+</Warning>
+
+## Code Review Process
+
+### Review Cycle
+
+1. **Initial Review**: A committer will review your changes
+2. **Feedback**: Address review comments and update your PR
+3. **Approval**: Once approved, a reviewer will add their name
+4. **Integration**: A sponsor (for non-committers) or you (if you're a committer) will integrate the change
+
+### Responding to Feedback
+
+```bash
+# Make requested changes
+git add <modified-files>
+git commit --amend
+git push --force-with-lease
+```
+
+<Accordion title="Best Practices for Review">
+  - Respond to all comments, even if just to acknowledge
+  - Ask questions if feedback is unclear
+  - Be open to suggestions and alternative approaches
+  - Update your PR description if the scope changes
+  - Keep changes focused on a single issue
+</Accordion>
+
+## Contribution Guidelines
+
+### Code Quality
+
+- **Follow Style Guidelines**: Adhere to [HotSpot Coding Style](/development/code-style)
+- **Write Tests**: All code changes must include appropriate tests
+- **Keep Changes Focused**: One issue per PR
+- **Maintain Compatibility**: Avoid breaking existing APIs
+
+### Communication
+
+- **Be Respectful**: Follow the [Code of Conduct](https://openjdk.org/bylaws#code-of-conduct)
+- **Ask Questions**: Use mailing lists or discussions for help
+- **Document Decisions**: Explain the reasoning behind non-obvious changes
+
+### Legal Requirements
+
+<Note>
+- Sign the OCA before contributing
+- Do not include code from other projects without proper licensing
+- Ensure you have the right to contribute the code
+</Note>
+
+## Types of Contributions
+
+### Bug Fixes
+
+Most contributions start as bug fixes:
+- Find a bug in the [JDK Bug System](https://bugs.openjdk.org)
+- Reproduce the issue locally
+- Fix the bug and add a regression test
+- Submit a PR with the fix
+
+### New Features
+
+Larger features require more planning:
+- Discuss on the relevant mailing list first
+- May require a JEP (JDK Enhancement Proposal) for significant changes
+- Break down into smaller, reviewable chunks
+- Include comprehensive tests and documentation
+
+### Documentation
+
+Documentation improvements are always welcome:
+- Fix typos and clarify confusing sections
+- Add examples and usage guidance
+- Update outdated information
+- Improve javadoc comments
+
+### Tests
+
+Test contributions help improve quality:
+- Add missing test coverage
+- Improve test stability
+- Write regression tests for fixed bugs
+
+## Resources
+
+### Essential Links
+
+- [OpenJDK Developers' Guide](https://openjdk.org/guide/) - Comprehensive contribution guide
+- [JDK Bug System](https://bugs.openjdk.org) - Browse and report issues
+- [Mailing Lists](https://mail.openjdk.org/mailman/listinfo) - Community discussions
+- [Code of Conduct](https://openjdk.org/bylaws#code-of-conduct) - Community guidelines
+
+### Getting Help
+
+<Accordion title="Where to Ask Questions">
+  - **General Questions**: discuss@openjdk.org
+  - **Build Issues**: build-dev@openjdk.org
+  - **HotSpot Development**: hotspot-dev@openjdk.org
+  - **Component-Specific**: Use relevant component mailing list
+</Accordion>
+
+<Accordion title="Finding a Sponsor">
+  If you're not yet a committer, you'll need a sponsor to integrate your changes:
+  - Ask on the relevant mailing list
+  - Reviewers often volunteer to sponsor good patches
+  - Demonstrate quality work to build relationships
+</Accordion>
+
+## Next Steps
+
+Once you've made your first contribution:
+
+1. Continue contributing to build expertise
+2. Consider becoming a [Committer](https://openjdk.org/bylaws#committer)
+3. Participate in code reviews to help others
+4. Share your knowledge through mailing lists and documentation
+
+<Note>
+Quality contributions and active participation are the path to becoming a recognized member of the OpenJDK community.
+</Note>

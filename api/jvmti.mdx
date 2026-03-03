@@ -1,0 +1,561 @@
+---
+title: JVM Tool Interface (JVMTI)
+description: Complete reference for the Java Virtual Machine Tool Interface, enabling profilers, debuggers, and monitoring tools to inspect and control JVM execution
+---
+
+JVMTI (JVM Tool Interface) is a native programming interface for inspecting the state and controlling the execution of applications running in the Java Virtual Machine. It provides capabilities for profiling, debugging, monitoring, thread analysis, and coverage analysis.
+
+## Overview
+
+JVMTI is defined in `src/hotspot/share/prims/jvmti.xml` and implemented across multiple files in the prims directory. It replaces the older JVMPI (JVM Profiler Interface) and JVMDI (JVM Debug Interface).
+
+### Key Features
+
+- **Event-based monitoring**: Receive notifications for VM events (class loading, method entry/exit, etc.)
+- **Heap inspection**: Walk the heap, tag objects, monitor allocations
+- **Thread control**: Suspend/resume threads, inspect stack frames
+- **Bytecode instrumentation**: Redefine and retransform classes
+- **Breakpoint support**: Set breakpoints and field watchpoints
+- **Local variable access**: Read and modify local variables
+
+## JVMTI Environment
+
+Each JVMTI agent receives a `jvmtiEnv` pointer that represents its interface to the JVM:
+
+```c
+typedef struct jvmtiEnv_struct {
+    const struct jvmtiInterface_1_ *functions;
+} jvmtiEnv;
+```
+
+From `src/hotspot/share/prims/jvmtiEnv.cpp:91-100`:
+
+```cpp
+JvmtiEnv::JvmtiEnv(jint version) : JvmtiEnvBase(version) {
+}
+
+JvmtiEnv::~JvmtiEnv() {
+}
+
+JvmtiEnv*
+JvmtiEnv::create_a_jvmti(jint version) {
+  return new JvmtiEnv(version);
+}
+```
+
+## Capabilities
+
+JVMTI uses capabilities to control which features are available to an agent. Agents must explicitly request capabilities before using certain functions.
+
+### Capabilities Structure
+
+From `src/hotspot/share/prims/jvmti.xml`, the jvmtiCapabilities structure contains boolean flags:
+
+<Tabs>
+  <Tab title="Heap Capabilities">
+    <ResponseField name="can_tag_objects" type="jboolean">
+      Can set and get tags for heap objects, required for heap iteration and object tagging
+    </ResponseField>
+
+    <ResponseField name="can_generate_garbage_collection_events" type="jboolean">
+      Can generate events when garbage collection begins and ends
+    </ResponseField>
+
+    <ResponseField name="can_generate_object_free_events" type="jboolean">
+      Can generate events when the garbage collector frees an object
+    </ResponseField>
+  </Tab>
+
+  <Tab title="Class Capabilities">
+    <ResponseField name="can_get_bytecodes" type="jboolean">
+      Can get bytecodes of a method via GetBytecodes()
+    </ResponseField>
+
+    <ResponseField name="can_get_synthetic_attribute" type="jboolean">
+      Can test if a field or method is synthetic
+    </ResponseField>
+
+    <ResponseField name="can_redefine_classes" type="jboolean">
+      Can redefine classes with RedefineClasses()
+    </ResponseField>
+
+    <ResponseField name="can_retransform_classes" type="jboolean">
+      Can retransform classes with RetransformClasses()
+    </ResponseField>
+
+    <ResponseField name="can_get_source_file_name" type="jboolean">
+      Can get source file name via GetSourceFileName()
+    </ResponseField>
+
+    <ResponseField name="can_get_line_numbers" type="jboolean">
+      Can get line number table via GetLineNumberTable()
+    </ResponseField>
+  </Tab>
+
+  <Tab title="Debug Capabilities">
+    <ResponseField name="can_generate_field_modification_events" type="jboolean">
+      Can set watchpoints on field modification via SetFieldModificationWatch()
+    </ResponseField>
+
+    <ResponseField name="can_generate_field_access_events" type="jboolean">
+      Can set watchpoints on field access via SetFieldAccessWatch()
+    </ResponseField>
+
+    <ResponseField name="can_generate_breakpoint_events" type="jboolean">
+      Can set breakpoints via SetBreakpoint()
+    </ResponseField>
+
+    <ResponseField name="can_generate_frame_pop_events" type="jboolean">
+      Can generate events when frames are popped from the stack
+    </ResponseField>
+
+    <ResponseField name="can_generate_method_entry_events" type="jboolean">
+      Can generate events on method entry
+    </ResponseField>
+
+    <ResponseField name="can_generate_method_exit_events" type="jboolean">
+      Can generate events on method exit
+    </ResponseField>
+  </Tab>
+
+  <Tab title="Thread Capabilities">
+    <ResponseField name="can_suspend" type="jboolean">
+      Can suspend and resume threads
+    </ResponseField>
+
+    <ResponseField name="can_signal_thread" type="jboolean">
+      Can signal threads with interrupt and stop
+    </ResponseField>
+
+    <ResponseField name="can_get_owned_monitor_info" type="jboolean">
+      Can get information about monitors owned by a thread
+    </ResponseField>
+
+    <ResponseField name="can_get_current_contended_monitor" type="jboolean">
+      Can get the monitor a thread is waiting to enter
+    </ResponseField>
+
+    <ResponseField name="can_get_monitor_info" type="jboolean">
+      Can get information about a monitor
+    </ResponseField>
+  </Tab>
+</Tabs>
+
+### Managing Capabilities
+
+```c
+jvmtiError
+AddCapabilities(jvmtiEnv* env,
+                const jvmtiCapabilities* capabilities_ptr)
+
+jvmtiError
+RelinquishCapabilities(jvmtiEnv* env,
+                       const jvmtiCapabilities* capabilities_ptr)
+
+jvmtiError
+GetCapabilities(jvmtiEnv* env,
+                jvmtiCapabilities* capabilities_ptr)
+```
+
+<Warning>
+Capabilities must be added during the OnLoad phase or during the live phase. Some capabilities can only be added during OnLoad.
+</Warning>
+
+## Agent Initialization
+
+JVMTI agents are loaded as native libraries and initialized via specific entry points:
+
+### Agent_OnLoad
+
+```c
+JNIEXPORT jint JNICALL
+Agent_OnLoad(JavaVM *vm, char *options, void *reserved)
+{
+    jvmtiEnv *jvmti;
+    jvmtiError error;
+    jvmtiCapabilities capabilities;
+    
+    // Get JVMTI environment
+    (*vm)->GetEnv(vm, (void **)&jvmti, JVMTI_VERSION_1_2);
+    
+    // Request capabilities
+    memset(&capabilities, 0, sizeof(capabilities));
+    capabilities.can_tag_objects = 1;
+    capabilities.can_generate_garbage_collection_events = 1;
+    error = (*jvmti)->AddCapabilities(jvmti, &capabilities);
+    
+    // Set event callbacks
+    jvmtiEventCallbacks callbacks;
+    memset(&callbacks, 0, sizeof(callbacks));
+    callbacks.VMInit = &vmInitCallback;
+    callbacks.GarbageCollectionStart = &gcStartCallback;
+    error = (*jvmti)->SetEventCallbacks(jvmti, &callbacks, sizeof(callbacks));
+    
+    // Enable events
+    error = (*jvmti)->SetEventNotificationMode(jvmti, JVMTI_ENABLE,
+                                                JVMTI_EVENT_VM_INIT, NULL);
+    
+    return JNI_OK;
+}
+```
+
+### Agent Phases
+
+<ResponseField name="OnLoad" type="phase">
+  Agent library loaded, JVMTI functions are limited. VM not initialized.
+</ResponseField>
+
+<ResponseField name="Primordial" type="phase">
+  After OnLoad, before VMStart. Very few JVMTI functions are available.
+</ResponseField>
+
+<ResponseField name="Start" type="phase">
+  VM is started but not fully initialized. More functions become available.
+</ResponseField>
+
+<ResponseField name="Live" type="phase">
+  VM is fully running. All JVMTI functions are available.
+</ResponseField>
+
+<ResponseField name="Dead" type="phase">
+  VM has terminated. Limited JVMTI functions available.
+</ResponseField>
+
+## Events
+
+JVMTI provides extensive event notifications for monitoring VM execution:
+
+### Event Callbacks Structure
+
+```c
+typedef struct {
+    jvmtiEventVMInit VMInit;
+    jvmtiEventVMDeath VMDeath;
+    jvmtiEventThreadStart ThreadStart;
+    jvmtiEventThreadEnd ThreadEnd;
+    jvmtiEventClassFileLoadHook ClassFileLoadHook;
+    jvmtiEventClassLoad ClassLoad;
+    jvmtiEventClassPrepare ClassPrepare;
+    jvmtiEventVMStart VMStart;
+    jvmtiEventException Exception;
+    jvmtiEventExceptionCatch ExceptionCatch;
+    jvmtiEventMethodEntry MethodEntry;
+    jvmtiEventMethodExit MethodExit;
+    jvmtiEventNativeMethodBind NativeMethodBind;
+    jvmtiEventCompiledMethodLoad CompiledMethodLoad;
+    jvmtiEventCompiledMethodUnload CompiledMethodUnload;
+    jvmtiEventDynamicCodeGenerated DynamicCodeGenerated;
+    jvmtiEventGarbageCollectionStart GarbageCollectionStart;
+    jvmtiEventGarbageCollectionFinish GarbageCollectionFinish;
+    jvmtiEventObjectFree ObjectFree;
+    // ... more events
+} jvmtiEventCallbacks;
+```
+
+### Common Event Callbacks
+
+<Tabs>
+  <Tab title="VM Events">
+    ```c
+    void JNICALL vmInitCallback(
+        jvmtiEnv *jvmti_env,
+        JNIEnv* jni_env,
+        jthread thread)
+    {
+        // VM initialization complete
+    }
+
+    void JNICALL vmDeathCallback(
+        jvmtiEnv *jvmti_env,
+        JNIEnv* jni_env)
+    {
+        // VM about to exit
+    }
+    ```
+  </Tab>
+
+  <Tab title="Thread Events">
+    ```c
+    void JNICALL threadStartCallback(
+        jvmtiEnv *jvmti_env,
+        JNIEnv* jni_env,
+        jthread thread)
+    {
+        // New thread started
+    }
+
+    void JNICALL threadEndCallback(
+        jvmtiEnv *jvmti_env,
+        JNIEnv* jni_env,
+        jthread thread)
+    {
+        // Thread about to terminate
+    }
+    ```
+  </Tab>
+
+  <Tab title="Class Events">
+    ```c
+    void JNICALL classLoadCallback(
+        jvmtiEnv *jvmti_env,
+        JNIEnv* jni_env,
+        jthread thread,
+        jclass klass)
+    {
+        // Class has been loaded
+    }
+
+    void JNICALL classPrepareCallback(
+        jvmtiEnv *jvmti_env,
+        JNIEnv* jni_env,
+        jthread thread,
+        jclass klass)
+    {
+        // Class has been prepared
+    }
+    ```
+  </Tab>
+
+  <Tab title="Method Events">
+    ```c
+    void JNICALL methodEntryCallback(
+        jvmtiEnv *jvmti_env,
+        JNIEnv* jni_env,
+        jthread thread,
+        jmethodID method)
+    {
+        // Method entry (requires can_generate_method_entry_events)
+    }
+
+    void JNICALL methodExitCallback(
+        jvmtiEnv *jvmti_env,
+        JNIEnv* jni_env,
+        jthread thread,
+        jmethodID method,
+        jboolean was_popped_by_exception,
+        jvalue return_value)
+    {
+        // Method exit (requires can_generate_method_exit_events)
+    }
+    ```
+  </Tab>
+
+  <Tab title="GC Events">
+    ```c
+    void JNICALL gcStartCallback(
+        jvmtiEnv *jvmti_env)
+    {
+        // Garbage collection started
+    }
+
+    void JNICALL gcFinishCallback(
+        jvmtiEnv *jvmti_env)
+    {
+        // Garbage collection finished
+    }
+
+    void JNICALL objectFreeCallback(
+        jvmtiEnv *jvmti_env,
+        jlong tag)
+    {
+        // Tagged object freed by GC
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Heap Inspection
+
+JVMTI provides powerful capabilities for heap analysis:
+
+### Object Tagging
+
+```c
+jvmtiError
+SetTag(jvmtiEnv* env,
+       jobject object,
+       jlong tag)
+
+jvmtiError
+GetTag(jvmtiEnv* env,
+       jobject object,
+       jlong* tag_ptr)
+
+jvmtiError
+GetObjectsWithTags(jvmtiEnv* env,
+                   jint tag_count,
+                   const jlong* tags,
+                   jint* count_ptr,
+                   jobject** object_result_ptr,
+                   jlong** tag_result_ptr)
+```
+
+### Heap Iteration
+
+```c
+jvmtiError
+IterateThroughHeap(jvmtiEnv* env,
+                   jint heap_filter,
+                   jclass klass,
+                   const jvmtiHeapCallbacks* callbacks,
+                   const void* user_data)
+
+jvmtiError
+FollowReferences(jvmtiEnv* env,
+                 jint heap_filter,
+                 jclass klass,
+                 jobject initial_object,
+                 const jvmtiHeapCallbacks* callbacks,
+                 const void* user_data)
+```
+
+### Heap Callback Example
+
+```c
+jint JNICALL heapObjectCallback(
+    jlong class_tag,
+    jlong size,
+    jlong* tag_ptr,
+    void* user_data)
+{
+    // Called for each object in heap
+    if (*tag_ptr == 0) {
+        *tag_ptr = ++object_counter;
+    }
+    return JVMTI_VISIT_OBJECTS;  // Continue iteration
+}
+```
+
+## Stack Frame Access
+
+Access and manipulate thread stack frames:
+
+```c
+jvmtiError
+GetStackTrace(jvmtiEnv* env,
+              jthread thread,
+              jint start_depth,
+              jint max_frame_count,
+              jvmtiFrameInfo* frame_buffer,
+              jint* count_ptr)
+
+jvmtiError
+GetLocalVariable(jvmtiEnv* env,
+                 jthread thread,
+                 jint depth,
+                 jint slot,
+                 jvalue* value_ptr)
+
+jvmtiError
+SetLocalVariable(jvmtiEnv* env,
+                 jthread thread,
+                 jint depth,
+                 jint slot,
+                 jvalue value)
+```
+
+## Class Redefinition
+
+Dynamically redefine classes at runtime:
+
+```c
+typedef struct {
+    jclass klass;
+    jint class_byte_count;
+    const unsigned char* class_bytes;
+} jvmtiClassDefinition;
+
+jvmtiError
+RedefineClasses(jvmtiEnv* env,
+                jint class_count,
+                const jvmtiClassDefinition* class_definitions)
+
+jvmtiError
+RetransformClasses(jvmtiEnv* env,
+                   jint class_count,
+                   const jclass* classes)
+```
+
+<Warning>
+Class redefinition has limitations:
+- Cannot add or remove methods or fields
+- Cannot change class hierarchy
+- Cannot change method signatures
+- Requires can_redefine_classes or can_retransform_classes capability
+</Warning>
+
+## Thread Control
+
+```c
+jvmtiError
+SuspendThread(jvmtiEnv* env,
+              jthread thread)
+
+jvmtiError
+ResumeThread(jvmtiEnv* env,
+             jthread thread)
+
+jvmtiError
+GetThreadInfo(jvmtiEnv* env,
+              jthread thread,
+              jvmtiThreadInfo* info_ptr)
+
+jvmtiError
+GetAllThreads(jvmtiEnv* env,
+              jint* threads_count_ptr,
+              jthread** threads_ptr)
+```
+
+## Raw Monitors
+
+JVMTI raw monitors provide synchronization independent of Java monitors:
+
+```c
+jvmtiError
+CreateRawMonitor(jvmtiEnv* env,
+                 const char* name,
+                 jrawMonitorID* monitor_ptr)
+
+jvmtiError
+RawMonitorEnter(jvmtiEnv* env,
+                jrawMonitorID monitor)
+
+jvmtiError
+RawMonitorExit(jvmtiEnv* env,
+               jrawMonitorID monitor)
+
+jvmtiError
+RawMonitorWait(jvmtiEnv* env,
+               jrawMonitorID monitor,
+               jlong millis)
+
+jvmtiError
+RawMonitorNotify(jvmtiEnv* env,
+                 jrawMonitorID monitor)
+```
+
+## Error Codes
+
+```c
+typedef enum {
+    JVMTI_ERROR_NONE = 0,
+    JVMTI_ERROR_INVALID_THREAD = 10,
+    JVMTI_ERROR_INVALID_THREAD_GROUP = 11,
+    JVMTI_ERROR_INVALID_PRIORITY = 12,
+    JVMTI_ERROR_THREAD_NOT_SUSPENDED = 13,
+    JVMTI_ERROR_THREAD_SUSPENDED = 14,
+    JVMTI_ERROR_THREAD_NOT_ALIVE = 15,
+    JVMTI_ERROR_INVALID_OBJECT = 20,
+    JVMTI_ERROR_INVALID_CLASS = 21,
+    JVMTI_ERROR_CLASS_NOT_PREPARED = 22,
+    JVMTI_ERROR_INVALID_METHODID = 23,
+    JVMTI_ERROR_INVALID_FIELDID = 25,
+    JVMTI_ERROR_OUT_OF_MEMORY = 110,
+    JVMTI_ERROR_MUST_POSSESS_CAPABILITY = 99,
+    // ... more error codes
+} jvmtiError;
+```
+
+<Note>
+Always check return values from JVMTI functions. Most errors indicate incorrect API usage or missing capabilities.
+</Note>

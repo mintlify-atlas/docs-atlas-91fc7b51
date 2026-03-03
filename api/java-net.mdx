@@ -1,0 +1,385 @@
+---
+title: java.net
+description: Network programming APIs for TCP/UDP sockets, URLs, and HTTP connections
+---
+
+The `java.net` package provides fundamental networking capabilities for Java applications. It includes classes for working with URLs, TCP/UDP sockets, IP addresses, and HTTP connections.
+
+## Core Networking Classes
+
+### Socket
+
+The `Socket` class implements client-side TCP sockets for stream-oriented communication between two machines.
+
+```java
+public class Socket implements java.io.Closeable
+```
+
+A socket is an endpoint for communication between two machines. The actual work is performed by an instance of `SocketImpl`.
+
+<Tabs>
+  <Tab title="Basic Usage">
+    ```java
+    // Connect to a server
+    Socket socket = new Socket("example.com", 8080);
+    
+    // Get input and output streams
+    InputStream in = socket.getInputStream();
+    OutputStream out = socket.getOutputStream();
+    
+    // Send data
+    out.write("Hello, Server!".getBytes());
+    
+    // Read response
+    byte[] buffer = new byte[1024];
+    int bytesRead = in.read(buffer);
+    
+    // Close the socket
+    socket.close();
+    ```
+  </Tab>
+  <Tab title="With Options">
+    ```java
+    Socket socket = new Socket();
+    
+    // Configure socket options
+    socket.setTcpNoDelay(true);  // Disable Nagle's algorithm
+    socket.setKeepAlive(true);   // Enable keep-alive
+    socket.setSoTimeout(5000);   // 5 second read timeout
+    
+    // Connect to server
+    socket.connect(new InetSocketAddress("example.com", 8080), 10000);
+    ```
+  </Tab>
+</Tabs>
+
+<ResponseField name="Socket Options" type="configuration">
+  - **SO_SNDBUF** - The size of the socket send buffer
+  - **SO_RCVBUF** - The size of the socket receive buffer
+  - **SO_KEEPALIVE** - Keep connection alive
+  - **SO_REUSEADDR** - Re-use address
+  - **SO_LINGER** - Linger on close if data is present
+  - **TCP_NODELAY** - Disable the Nagle algorithm
+</ResponseField>
+
+### ServerSocket
+
+The `ServerSocket` class implements server-side TCP sockets that wait for client connection requests.
+
+```java
+public class ServerSocket implements java.io.Closeable
+```
+
+<Tabs>
+  <Tab title="Basic Server">
+    ```java
+    // Create server socket on port 8080
+    ServerSocket serverSocket = new ServerSocket(8080);
+    
+    System.out.println("Server listening on port 8080");
+    
+    while (true) {
+        // Wait for client connection
+        Socket clientSocket = serverSocket.accept();
+        
+        // Handle client in new thread
+        new Thread(() -> {
+            try {
+                InputStream in = clientSocket.getInputStream();
+                OutputStream out = clientSocket.getOutputStream();
+                
+                // Process client request
+                byte[] buffer = new byte[1024];
+                int bytesRead = in.read(buffer);
+                
+                // Send response
+                out.write("HTTP/1.1 200 OK\r\n\r\n".getBytes());
+                
+                clientSocket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }).start();
+    }
+    ```
+  </Tab>
+  <Tab title="With Backlog">
+    ```java
+    // Create server with specific backlog
+    ServerSocket serverSocket = new ServerSocket();
+    serverSocket.setReuseAddress(true);
+    serverSocket.bind(new InetSocketAddress(8080), 50);
+    
+    // Set SO_TIMEOUT for accept()
+    serverSocket.setSoTimeout(30000); // 30 seconds
+    ```
+  </Tab>
+</Tabs>
+
+### DatagramSocket
+
+The `DatagramSocket` class is used for sending and receiving UDP datagram packets.
+
+```java
+public class DatagramSocket implements java.io.Closeable
+```
+
+A datagram socket provides connectionless packet delivery. Packets sent from one machine to another may be routed differently and may arrive in any order.
+
+<Tabs>
+  <Tab title="Send Datagram">
+    ```java
+    DatagramSocket socket = new DatagramSocket();
+    
+    // Prepare data
+    String message = "Hello, UDP!";
+    byte[] buffer = message.getBytes();
+    
+    // Create packet
+    InetAddress address = InetAddress.getByName("example.com");
+    DatagramPacket packet = new DatagramPacket(
+        buffer, buffer.length, address, 9876
+    );
+    
+    // Send packet
+    socket.send(packet);
+    socket.close();
+    ```
+  </Tab>
+  <Tab title="Receive Datagram">
+    ```java
+    DatagramSocket socket = new DatagramSocket(9876);
+    
+    // Prepare buffer for incoming data
+    byte[] buffer = new byte[1024];
+    DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+    
+    // Receive packet (blocks until packet arrives)
+    socket.receive(packet);
+    
+    // Process received data
+    String received = new String(
+        packet.getData(), 0, packet.getLength()
+    );
+    System.out.println("Received: " + received);
+    
+    socket.close();
+    ```
+  </Tab>
+</Tabs>
+
+### URL
+
+The `URL` class represents a Uniform Resource Locator, a pointer to a resource on the World Wide Web.
+
+```java
+public final class URL implements java.io.Serializable
+```
+
+<Tabs>
+  <Tab title="Parse URL">
+    ```java
+    URL url = new URL("https://www.example.com:8080/path/to/resource?key=value#fragment");
+    
+    System.out.println("Protocol: " + url.getProtocol());  // https
+    System.out.println("Host: " + url.getHost());          // www.example.com
+    System.out.println("Port: " + url.getPort());          // 8080
+    System.out.println("Path: " + url.getPath());          // /path/to/resource
+    System.out.println("Query: " + url.getQuery());        // key=value
+    System.out.println("Ref: " + url.getRef());            // fragment
+    ```
+  </Tab>
+  <Tab title="Read Content">
+    ```java
+    URL url = new URL("https://example.com/data.json");
+    
+    try (InputStream in = url.openStream();
+         BufferedReader reader = new BufferedReader(
+             new InputStreamReader(in))) {
+        
+        String line;
+        while ((line = reader.readLine()) != null) {
+            System.out.println(line);
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### InetAddress
+
+The `InetAddress` class represents an Internet Protocol (IP) address, either IPv4 (32-bit) or IPv6 (128-bit).
+
+```java
+public class InetAddress implements java.io.Serializable
+```
+
+<Tabs>
+  <Tab title="Resolve Hostname">
+    ```java
+    // Get IP address by hostname
+    InetAddress address = InetAddress.getByName("www.example.com");
+    System.out.println("IP: " + address.getHostAddress());
+    
+    // Get all IP addresses for a hostname
+    InetAddress[] addresses = InetAddress.getAllByName("www.google.com");
+    for (InetAddress addr : addresses) {
+        System.out.println(addr.getHostAddress());
+    }
+    
+    // Get local host
+    InetAddress localhost = InetAddress.getLocalHost();
+    System.out.println("Local: " + localhost.getHostName());
+    ```
+  </Tab>
+  <Tab title="Reverse DNS">
+    ```java
+    // Create from IP address
+    byte[] ipAddr = {(byte)192, (byte)168, 1, 1};
+    InetAddress address = InetAddress.getByAddress(ipAddr);
+    
+    // Get hostname (reverse DNS lookup)
+    String hostname = address.getHostName();
+    System.out.println("Hostname: " + hostname);
+    
+    // Check if address is reachable
+    boolean reachable = address.isReachable(5000); // 5 second timeout
+    System.out.println("Reachable: " + reachable);
+    ```
+  </Tab>
+</Tabs>
+
+### HttpURLConnection
+
+The `HttpURLConnection` class extends `URLConnection` with HTTP-specific features.
+
+```java
+public abstract class HttpURLConnection extends URLConnection
+```
+
+<Tabs>
+  <Tab title="GET Request">
+    ```java
+    URL url = new URL("https://api.example.com/users");
+    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    
+    conn.setRequestMethod("GET");
+    conn.setRequestProperty("Accept", "application/json");
+    conn.setConnectTimeout(5000);
+    conn.setReadTimeout(5000);
+    
+    int responseCode = conn.getResponseCode();
+    System.out.println("Response Code: " + responseCode);
+    
+    if (responseCode == HttpURLConnection.HTTP_OK) {
+        try (BufferedReader in = new BufferedReader(
+                new InputStreamReader(conn.getInputStream()))) {
+            String inputLine;
+            StringBuilder response = new StringBuilder();
+            
+            while ((inputLine = in.readLine()) != null) {
+                response.append(inputLine);
+            }
+            
+            System.out.println(response.toString());
+        }
+    }
+    
+    conn.disconnect();
+    ```
+  </Tab>
+  <Tab title="POST Request">
+    ```java
+    URL url = new URL("https://api.example.com/users");
+    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    
+    conn.setRequestMethod("POST");
+    conn.setRequestProperty("Content-Type", "application/json");
+    conn.setDoOutput(true);
+    
+    // Send JSON data
+    String jsonInput = "{\"name\": \"John\", \"email\": \"john@example.com\"}";
+    
+    try (OutputStream os = conn.getOutputStream()) {
+        byte[] input = jsonInput.getBytes("utf-8");
+        os.write(input, 0, input.length);
+    }
+    
+    int responseCode = conn.getResponseCode();
+    System.out.println("Response Code: " + responseCode);
+    ```
+  </Tab>
+</Tabs>
+
+## Advanced Classes
+
+### NetworkInterface
+
+Represents a network interface (e.g., eth0, wlan0) with methods to query network interface properties.
+
+```java
+Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+while (interfaces.hasMoreElements()) {
+    NetworkInterface ni = interfaces.nextElement();
+    System.out.println("Interface: " + ni.getName());
+    
+    Enumeration<InetAddress> addresses = ni.getInetAddresses();
+    while (addresses.hasMoreElements()) {
+        System.out.println("  Address: " + addresses.nextElement());
+    }
+}
+```
+
+### URI
+
+The `URI` class represents a Uniform Resource Identifier reference, providing parsing and manipulation capabilities.
+
+```java
+URI uri = new URI("https://example.com:8080/path?query=value#fragment");
+System.out.println("Scheme: " + uri.getScheme());
+System.out.println("Authority: " + uri.getAuthority());
+System.out.println("Path: " + uri.getPath());
+
+// Resolve relative URI
+URI base = new URI("https://example.com/dir/");
+URI resolved = base.resolve("../other/file.html");
+System.out.println("Resolved: " + resolved);
+```
+
+### URLEncoder / URLDecoder
+
+Utility classes for encoding and decoding URL components.
+
+```java
+// Encode
+String encoded = URLEncoder.encode("hello world & special chars", "UTF-8");
+System.out.println(encoded); // hello+world+%26+special+chars
+
+// Decode
+String decoded = URLDecoder.decode(encoded, "UTF-8");
+System.out.println(decoded); // hello world & special chars
+```
+
+<Note>
+  The legacy `HttpURLConnection` API is still widely used, but for modern HTTP/2 and HTTP/3 support, consider using the newer `java.net.http.HttpClient` API introduced in Java 11.
+</Note>
+
+## Exception Hierarchy
+
+Common exceptions thrown by java.net classes:
+
+- **IOException** - Base class for I/O errors
+  - **SocketException** - Socket-related errors
+    - **BindException** - Address already in use
+    - **ConnectException** - Connection refused
+    - **NoRouteToHostException** - No route to host
+    - **PortUnreachableException** - ICMP Port Unreachable received
+  - **SocketTimeoutException** - Socket operation timeout
+  - **UnknownHostException** - Cannot resolve hostname
+  - **MalformedURLException** - Invalid URL format
+  - **ProtocolException** - Protocol error
+
+## See Also
+
+- [java.nio](/api/java-nio) - New I/O APIs with channels and buffers
+- [java.net.http.HttpClient](/api/java-net-http) - Modern HTTP client (Java 11+)

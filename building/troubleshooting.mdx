@@ -1,0 +1,778 @@
+---
+title: Build Troubleshooting
+description: Common build issues, debugging techniques, and solutions for OpenJDK build problems
+---
+
+If your build fails, this guide will help you pinpoint the problem and find a solution.
+
+## Locating the Source of Errors
+
+### Build Failure Summary
+
+When a build fails, the build system prints a failure summary:
+
+```
+ERROR: Build failed for target 'hotspot' in configuration 'linux-x64' (exit code 2)
+
+=== Output from failing command(s) repeated here ===
+* For target hotspot_variant-server_libjvm_objs_psMemoryPool.o:
+/src/jdk/hotspot/src/share/vm/services/psMemoryPool.cpp:1:1: error: 'failhere' does not name a type
+   ... (rest of output omitted)
+
+* All command lines available in /src/jdk/build/linux-x64/make-support/failure-logs.
+=== End of repeated output ===
+
+=== Make failed targets repeated here ===
+lib/CompileJvm.gmk:207: recipe for target '/src/jdk/build/linux-x64/hotspot/variant-server/libjvm/objs/psMemoryPool.o' failed
+make/Main.gmk:263: recipe for target 'hotspot-server-libs' failed
+=== End of repeated output ===
+
+HELP: Try searching the build log for the name of the first failed target.
+HELP: Run 'make doctor' to diagnose build problems.
+```
+
+### Understanding the Failure Summary
+
+<Steps>
+  <Step title="Configuration and target">
+    The first line shows which configuration failed and which top-level target you were building.
+  </Step>
+
+  <Step title="Command output">
+    Between `Output from failing command(s) repeated here` and `End of repeated output`, you'll see the actual error message(s) from the failing command(s).
+    
+    In parallel builds, output from all failed commands is shown.
+  </Step>
+
+  <Step title="Failure logs directory">
+    The path to `failure-logs` directory is printed. Contains:
+    - `<target>.log` - Complete output from the failing command
+    - `<target>.cmd` - Complete command line used
+    
+    Re-run the failing command:
+    ```bash
+    . <path-to-failure-logs>/<target>.cmd
+    ```
+  </Step>
+
+  <Step title="Make target chain">
+    Between `Make failed targets repeated here` and `End of repeated output`, you'll see the chain of make targets leading to the failure.
+    
+    The first failed recipe typically contains the full path to the file that failed to compile.
+  </Step>
+</Steps>
+
+### Checking the Build Log File
+
+Build output is always saved:
+
+```bash
+# Current build log
+cat $BUILD/build.log
+
+# Previous build log
+cat $BUILD/build.log.old
+```
+
+<Accordion title="Increase log verbosity">
+  ```bash
+  # Show command lines
+  make LOG=cmdlines
+  
+  # Info level (general verbosity)
+  make LOG=info
+  
+  # Debug level (shows most shell commands)
+  make LOG=debug
+  
+  # Trace level (shows all commands - VERY verbose)
+  make LOG=trace
+  
+  # Combine levels
+  make LOG=info,cmdlines
+  ```
+  
+  <Warning>
+    `debug` and `trace` levels produce massive build logs!
+  </Warning>
+</Accordion>
+
+### Searching the Build Log
+
+Useful search patterns:
+
+```bash
+# Search for specific file that failed
+grep "psMemoryPool.o" $BUILD/build.log
+
+# Search for error markers
+grep "] Error" $BUILD/build.log
+grep "\*\*\*" $BUILD/build.log
+
+# Search for warnings
+grep -i "warning" $BUILD/build.log
+```
+
+## Running "make doctor"
+
+<Info>
+  Always run `make doctor` when encountering unexpected build failures.
+</Info>
+
+The build system includes a diagnostic tool:
+
+```bash
+make doctor
+```
+
+Example output:
+
+```
+"make doctor" will help you analyze your build environment. It can highlight
+certain well-known problems, but it can never find all possible errors.
+
+* Verifying that configure has picked up git...
+
+* Checking for warnings from configure...
+ ---
+The following warnings were produced. Repeated here for convenience:
+WARNING: pandoc is version 3.1.9, not the recommended version 2.19.2
+ ---
+! Inspect the warnings, fix any problems, and re-run configure
+
+* Checking for left-over core files...
+Found these potential core files. They might interfere with the build process:
+ ---
+src/hotspot/core.1337
+ ---
+! Remove left-over core files
+
+* Checking for untracked files with illegal names...
+
+* If all else fails, try removing the entire build directory and re-creating
+the same configuration using:
+ ---
+configure_command_line=$(make print-configuration)
+make dist-clean
+bash configure $configure_command_line
+ ---
+
+* The build README (doc/building.md) is a great source of information,
+especially the chapter "Fixing Unexpected Build Failures". Check it out!
+
+* If you still need assistance please contact build-dev@openjdk.org.
+```
+
+### What Doctor Checks
+
+- Git availability
+- Configure warnings
+- Left-over core files
+- Untracked files with illegal names
+- Other common build environment issues
+
+<Note>
+  Doctor checks are expensive and not run during normal builds, but they can catch many issues.
+</Note>
+
+## Problems with the Build Environment
+
+### Rechecking Configuration
+
+```bash
+# Re-run configure and check for warnings
+bash configure
+
+# Review full configure log
+cat $BUILD/configure.log
+
+# Check configuration summary
+make print-configuration
+```
+
+<Accordion title="Verify configuration summary">
+  After running configure, check the summary:
+  
+  ```
+  Configuration summary:
+   * Debug level:    release
+   * JVM variants:   server
+   * OpenJDK target: OS: linux, CPU: x64
+   * Boot JDK:       java version "21"
+   * Toolchain:      gcc (GNU Compiler Collection)
+  ```
+  
+  Verify:
+  - Are you using the expected Boot JDK?
+  - Is the correct toolchain selected?
+  - Are the target OS and CPU correct?
+</Accordion>
+
+### Compiler Warnings as Errors
+
+By default, compiler warnings are treated as errors.
+
+```bash
+# Disable warnings-as-errors for old/new compilers
+bash configure --disable-warnings-as-errors
+```
+
+<Note>
+  Warnings will still be shown, but won't fail the build. Use this for very new or very old compiler versions.
+</Note>
+
+### Configure Warnings
+
+Pay attention to configure warnings (repeated at the end of output):
+
+```bash
+# Review warnings
+bash configure 2>&1 | grep -A 5 "WARNING"
+
+# Check specific configuration issues
+cat $BUILD/configure.log | grep -i warning
+```
+
+## Problems with Incremental Rebuilds
+
+Incremental rebuild issues are the most common cause of unexpected build failures.
+
+### Rebuild Strategy
+
+Try these steps in order (each requires more time):
+
+<Steps>
+  <Step title="Update repository">
+    ```bash
+    git pull origin master
+    make images
+    ```
+    
+    Ensures you have the latest changes.
+  </Step>
+
+  <Step title="Clean build results">
+    ```bash
+    make clean
+    make images
+    ```
+    
+    Removes all build results but keeps configuration. **Solves most incremental build issues.**
+  </Step>
+
+  <Step title="Complete clean">
+    ```bash
+    # Save configuration
+    make print-configuration > current-configuration
+    
+    # Clean everything
+    make dist-clean
+    
+    # Restore and rebuild
+    bash configure $(cat current-configuration)
+    make images
+    ```
+    
+    Removes all generated output including configuration.
+  </Step>
+
+  <Step title="Re-clone repository">
+    ```bash
+    # Save local changes
+    git format-patch -o /tmp/jdk-patches origin/master
+    
+    # Re-clone
+    cd ..
+    mv jdk jdk.old
+    git clone https://git.openjdk.org/jdk
+    cd jdk
+    
+    # Reapply changes
+    git am /tmp/jdk-patches/*.patch
+    
+    # Configure and build
+    bash configure [options]
+    make images
+    ```
+    
+    The "sledgehammer approach" - use when repository state is corrupted.
+  </Step>
+</Steps>
+
+## Specific Build Issues
+
+### Clock Skew
+
+**Error message:**
+```
+File 'xxx' has modification time in the future.
+Clock skew detected. Your build may be incomplete.
+```
+
+**Cause:** Build machine clock is out of sync with source file timestamps.
+
+**Solution:**
+```bash
+# Fix system clock
+sudo ntpdate pool.ntp.org  # Linux
+# Or use your OS time sync method
+
+# Clean and rebuild
+make clean
+make images
+```
+
+### Out of Memory Errors
+
+#### Windows-Specific OOM
+
+**Error messages:**
+```
+fatal error - couldn't allocate heap
+cannot create ... Permission denied
+spawn failed
+```
+
+**Solutions:**
+
+<Accordion title="Check Cygwin BLODA">
+  This might be a Cygwin issue. Check:
+  - [BLODA list](https://cygwin.com/faq/faq.html#faq.using.bloda) (interfering software)
+  - [fork() failures](https://cygwin.com/faq/faq.html#faq.using.fixing-fork-failures)
+  
+  Reboot Windows in safe mode and retry if needed.
+</Accordion>
+
+#### General OOM Solutions
+
+```bash
+# Reduce parallel jobs
+make JOBS=4
+
+# Configure with less memory usage
+bash configure --with-num-cores=4 --with-memory-size=8192
+
+# Reduce Boot JDK memory
+bash configure --with-boot-jdk-jvmargs="-Xmx2G"
+```
+
+### Spaces in Path (Windows)
+
+**Problem:** Configure reports directories with spaces but can't access them.
+
+**Error indicators:**
+```
+fixpath.sh: cannot access directory
+Cannot find Visual Studio
+```
+
+**Solution:** Assign short names to directories with spaces.
+
+<Steps>
+  <Step title="Check if short names exist">
+    ```cmd
+    dir /X "C:\Program Files"
+    ```
+    
+    Look for entries like `PROGRA~1` in the output.
+  </Step>
+
+  <Step title="Enable short name creation (if disabled)">
+    ```cmd
+    # Run cmd.exe as Administrator
+    fsutil 8dot3name set C: 0
+    ```
+  </Step>
+
+  <Step title="Create short name manually">
+    ```cmd
+    # If directory doesn't have short name
+    fsutil file setshortname "C:\Program Files\Microsoft Visual Studio" MSVS
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  Only `Microsoft Visual Studio` and `Windows Kits` directories require short paths. Other warnings (e.g., `IntelliJ IDEA`) can be ignored.
+</Note>
+
+### Locale Issues (Windows)
+
+**Recommended configuration:**
+- System locale: **US English**
+- User locale: **US English**
+
+**Change system locale:**
+1. Control Panel → Regional Settings → Administrative
+2. Click "Change System Locale" button
+3. Select "English (United States)"
+4. Restart
+
+<Warning>
+  Non-US English locales are **not supported**. While builds may work, you might encounter odd issues.
+</Warning>
+
+### Visual Studio Not Detected
+
+**Solutions:**
+
+<Accordion title="Check installation path for spaces">
+  Visual Studio might not be detected due to spaces in path. See "Spaces in Path" section.
+</Accordion>
+
+<Accordion title="Verify US English language pack">
+  ```cmd
+  # Via GUI:
+  # 1. Visual Studio Installer → Modify
+  # 2. Language packs tab → English
+  # 3. Click Modify
+  
+  # Via command line (run as Administrator):
+  "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe" modify ^
+    --channelId VisualStudio.17.Release ^
+    --productId Microsoft.VisualStudio.Product.BuildTools ^
+    --addProductLang en-us -p
+  ```
+  
+  Adjust version number (`17` = VS 2022) and product ID as needed.
+</Accordion>
+
+<Accordion title="Specify Visual Studio version">
+  ```bash
+  bash configure --with-toolchain-version=2022
+  ```
+</Accordion>
+
+### Xcode Update Issues (macOS)
+
+**Problem:** After OS or Xcode update, build fails.
+
+**Solutions:**
+
+<Accordion title="Use older Xcode version">
+  ```bash
+  # Download older Xcode from xcodereleases.com
+  # Install to /Applications/Xcode13.1.app
+  
+  # Use specific version
+  bash configure --with-xcode-path=/Applications/Xcode13.1.app
+  ```
+</Accordion>
+
+<Accordion title="Check for patches">
+  Visit:
+  - [OpenJDK mailing lists](https://mail.openjdk.org/pipermail/build-dev/)
+  - [OpenJDK GitHub](https://github.com/openjdk/jdk/pulls)
+  
+  Look for recent patches addressing your macOS/Xcode version.
+</Accordion>
+
+<Accordion title="Install Metal toolchain (Xcode 26+)">
+  ```bash
+  xcodebuild -downloadComponent metalToolchain
+  ```
+</Accordion>
+
+### Missing Dependencies
+
+Configure usually suggests how to install missing dependencies.
+
+**Common missing dependencies:**
+
+<Tabs>
+  <Tab title="Linux (Debian/Ubuntu)">
+    ```bash
+    # Development tools
+    sudo apt-get install build-essential autoconf
+    
+    # Libraries
+    sudo apt-get install libx11-dev libxext-dev libxrender-dev \
+      libxrandr-dev libxtst-dev libxt-dev libcups2-dev \
+      libfontconfig1-dev libasound2-dev libfreetype6-dev
+    ```
+  </Tab>
+
+  <Tab title="Linux (Fedora/Red Hat)">
+    ```bash
+    # Development tools
+    sudo yum groupinstall "Development Tools"
+    
+    # Libraries
+    sudo yum install libXtst-devel libXt-devel libXrender-devel \
+      libXrandr-devel cups-devel fontconfig-devel alsa-lib-devel \
+      freetype-devel
+    ```
+  </Tab>
+
+  <Tab title="macOS">
+    ```bash
+    # Install Homebrew if needed
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    
+    # Install dependencies
+    brew install autoconf freetype
+    ```
+  </Tab>
+
+  <Tab title="Windows (Cygwin)">
+    ```bash
+    # Install packages
+    <path-to-setup>/setup-x86_64.exe -q -P autoconf -P make -P unzip -P zip
+    ```
+  </Tab>
+</Tabs>
+
+### Boot JDK Issues
+
+<Accordion title="Wrong Boot JDK version">
+  **Error:** Version mismatch between Boot JDK and JDK being built.
+  
+  **Solution:**
+  ```bash
+  # Building JDK N requires Boot JDK N-1
+  # For example, building JDK 23 requires JDK 22
+  bash configure --with-boot-jdk=/path/to/jdk-22
+  ```
+</Accordion>
+
+<Accordion title="Boot JDK not found">
+  **Error:** Configure can't locate a suitable Boot JDK.
+  
+  **Solution:**
+  ```bash
+  # Explicitly specify Boot JDK
+  bash configure --with-boot-jdk=/usr/lib/jvm/java-21-openjdk
+  
+  # Or download from:
+  # - https://adoptium.net/
+  # - https://www.oracle.com/java/technologies/downloads/
+  ```
+</Accordion>
+
+<Accordion title="Boot JDK memory issues">
+  **Error:** Boot JDK runs out of memory during build.
+  
+  **Solution:**
+  ```bash
+  bash configure --with-boot-jdk-jvmargs="-Xmx8G"
+  ```
+</Accordion>
+
+## Platform-Specific Issues
+
+### Linux-Specific
+
+<Accordion title="UTF-8 locale not available">
+  ```bash
+  # Check available locales
+  locale -a | grep -i utf
+  
+  # Generate locale if missing
+  sudo locale-gen en_US.UTF-8
+  
+  # Set for build
+  export LC_ALL=en_US.UTF-8
+  bash configure
+  ```
+</Accordion>
+
+<Accordion title="GCC version too old">
+  **Minimum:** GCC 10.0
+  
+  **Solution:** Install newer GCC or use distribution's update repositories:
+  ```bash
+  # Ubuntu - use toolchain PPA
+  sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+  sudo apt-get update
+  sudo apt-get install gcc-12 g++-12
+  
+  # Specify to configure
+  bash configure CC=gcc-12 CXX=g++-12
+  ```
+</Accordion>
+
+### macOS-Specific
+
+<Accordion title="Xcode Command Line Tools missing">
+  ```bash
+  xcode-select --install
+  ```
+</Accordion>
+
+<Accordion title="Code signing failures">
+  ```bash
+  # For development (ad-hoc signing)
+  bash configure --with-macosx-codesign=debug
+  
+  # Or disable codesigning (may prevent core dumps)
+  bash configure --without-macosx-codesign
+  ```
+</Accordion>
+
+### Windows-Specific
+
+<Accordion title="Cygwin fork failures">
+  - Reboot computer
+  - Check for BLODA (interfering antivirus/software)
+  - Reinstall Cygwin
+  - Try MSYS2 or WSL instead
+</Accordion>
+
+<Accordion title="Long path issues">
+  Enable long path support in Windows:
+  
+  ```cmd
+  # Run as Administrator
+  reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f
+  ```
+  
+  Restart computer.
+</Accordion>
+
+## Debugging the Build System
+
+### Fixpath Debugging (Windows)
+
+If you suspect path conversion issues:
+
+```bash
+# Enable fixpath debugging
+DEBUG_FIXPATH=1 make jdk
+
+# Manually test path conversion
+bash make/scripts/fixpath.sh print /mnt/c/windows
+bash make/scripts/fixpath.sh import "c:\\windows"
+```
+
+Output shows how paths are being translated.
+
+### Analyzing Dependencies
+
+```bash
+# Build with trace logging (single job)
+make JOBS=1 LOG=trace > trace.log 2>&1
+
+# Check build trace times
+cat $BUILD/build-trace-time.log
+```
+
+### Comparing Builds
+
+```bash
+# Build two versions
+make dist-clean
+bash configure [options1]
+make images
+mv build/config1 build/old-config
+
+bash configure [options2]
+make images
+
+# Compare outputs
+build/*/compare.sh -o build/old-config
+```
+
+## Getting Help
+
+### Before Asking for Help
+
+<Steps>
+  <Step title="Run make doctor">
+    ```bash
+    make doctor
+    ```
+  </Step>
+
+  <Step title="Check this documentation">
+    Review all troubleshooting sections and the requirements page.
+  </Step>
+
+  <Step title="Search existing issues">
+    - [OpenJDK Build Dev mailing list archives](https://mail.openjdk.org/pipermail/build-dev/)
+    - [OpenJDK Bug Database](https://bugs.openjdk.org/)
+  </Step>
+
+  <Step title="Gather diagnostic information">
+    - Full configure log: `$BUILD/configure.log`
+    - Build log: `$BUILD/build.log`
+    - Configuration summary: `make print-configuration`
+    - Output from `make doctor`
+  </Step>
+</Steps>
+
+### Contacting the Build Group
+
+If you believe you've found a bug in the build system:
+
+**Email:** [build-dev@openjdk.org](mailto:build-dev@openjdk.org)
+
+**Include:**
+- Description of the problem
+- Operating system and version
+- Toolchain version (compiler, make, etc.)
+- Configure command line
+- Relevant portions of configure and build logs
+- Output from `make doctor`
+- Steps to reproduce
+
+### Contributing to OpenJDK
+
+For general help on developing for the JDK:
+
+- [OpenJDK Developers' Guide](https://openjdk.org/guide/)
+- [Adoption Group](https://wiki.openjdk.org/display/Adoption)
+
+## Quick Reference: Common Solutions
+
+<AccordionGroup>
+  <Accordion title="Build fails after git pull">
+    ```bash
+    make clean
+    make images
+    ```
+  </Accordion>
+
+  <Accordion title="Build fails with mysterious errors">
+    ```bash
+    make doctor
+    make clean
+    make images
+    ```
+  </Accordion>
+
+  <Accordion title="Configure can't find Boot JDK">
+    ```bash
+    bash configure --with-boot-jdk=/path/to/jdk
+    ```
+  </Accordion>
+
+  <Accordion title="Out of memory during build">
+    ```bash
+    make JOBS=4
+    # Or reconfigure:
+    bash configure --with-num-cores=4 --with-memory-size=8192
+    ```
+  </Accordion>
+
+  <Accordion title="Windows path issues">
+    ```bash
+    # Use Unix-style paths
+    bash configure --with-boot-jdk=/cygdrive/c/jdk-21
+    ```
+  </Accordion>
+
+  <Accordion title="Visual Studio not found">
+    ```bash
+    bash configure --with-toolchain-version=2022
+    ```
+  </Accordion>
+
+  <Accordion title="Complete reset">
+    ```bash
+    make print-configuration > saved-config.txt
+    make dist-clean
+    bash configure $(cat saved-config.txt)
+    make images
+    ```
+  </Accordion>
+</AccordionGroup>

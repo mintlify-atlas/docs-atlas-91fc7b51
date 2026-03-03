@@ -1,0 +1,578 @@
+---
+title: jpackage - Java Packaging Tool
+description: Package self-contained Java applications with native installers for Windows, macOS, and Linux platforms
+---
+
+The `jpackage` tool packages a Java application into a platform-specific package that includes all necessary dependencies. It is part of the `jdk.jpackage` module.
+
+## Basic Usage
+
+```bash
+jpackage --input input-dir --name AppName --main-jar app.jar --main-class com.example.Main
+```
+
+## Source Code
+
+The jpackage implementation is located at:
+- **Main class**: `src/jdk.jpackage/share/classes/jdk/jpackage/main/Main.java:1`
+- **CLI handler**: `src/jdk.jpackage/share/classes/jdk/jpackage/internal/cli/Main.java:1`
+- **Options**: `src/jdk.jpackage/share/classes/jdk/jpackage/internal/cli/StandardOption.java:1`
+- **Linux packager**: `src/jdk.jpackage/linux/classes/jdk/jpackage/internal/LinuxPackager.java:1`
+
+## Package Types
+
+jpackage can create different types of packages depending on the platform:
+
+<Tabs>
+  <Tab title="Linux">
+    **Available formats:**
+    - `deb` - Debian package (.deb)
+    - `rpm` - RPM package (.rpm)
+    - `app-image` - Application image directory
+    
+    ```bash
+    jpackage --type deb --input lib --main-jar myapp.jar --name MyApp
+    jpackage --type rpm --input lib --main-jar myapp.jar --name MyApp
+    ```
+  </Tab>
+  
+  <Tab title="Windows">
+    **Available formats:**
+    - `exe` - Windows executable installer
+    - `msi` - Windows MSI installer
+    - `app-image` - Application image directory
+    
+    ```bash
+    jpackage --type exe --input lib --main-jar myapp.jar --name MyApp
+    jpackage --type msi --input lib --main-jar myapp.jar --name MyApp
+    ```
+  </Tab>
+  
+  <Tab title="macOS">
+    **Available formats:**
+    - `dmg` - macOS DMG image
+    - `pkg` - macOS PKG installer
+    - `app-image` - Application bundle (.app)
+    
+    ```bash
+    jpackage --type dmg --input lib --main-jar myapp.jar --name MyApp
+    jpackage --type pkg --input lib --main-jar myapp.jar --name MyApp
+    ```
+  </Tab>
+</Tabs>
+
+## Essential Options
+
+### Application Identity
+
+<ParamField path="--name" type="string" required>
+  Name of the application and/or package. Can also use `-n`.
+  
+  ```bash
+  jpackage --name MyApplication --input lib --main-jar app.jar
+  ```
+</ParamField>
+
+<ParamField path="--app-version" type="version">
+  Version of the application and/or package.
+  
+  ```bash
+  jpackage --name MyApp --app-version 1.2.3 --input lib --main-jar app.jar
+  ```
+</ParamField>
+
+<ParamField path="--vendor" type="string">
+  Vendor of the application.
+  
+  ```bash
+  jpackage --name MyApp --vendor "Example Corp" --input lib --main-jar app.jar
+  ```
+</ParamField>
+
+<ParamField path="--description" type="string">
+  Description of the application.
+  
+  ```bash
+  jpackage --name MyApp --description "My awesome application" \
+           --input lib --main-jar app.jar
+  ```
+</ParamField>
+
+<ParamField path="--copyright" type="string">
+  Copyright for the application.
+  
+  ```bash
+  jpackage --name MyApp --copyright "Copyright 2026 Example Corp" \
+           --input lib --main-jar app.jar
+  ```
+</ParamField>
+
+### Input and Output
+
+<ParamField path="--input" type="directory">
+  Path of the input directory containing files to package. Can also use `-i`.
+  
+  ```bash
+  jpackage --input target/lib --main-jar myapp.jar --name MyApp
+  ```
+</ParamField>
+
+<ParamField path="--dest" type="directory">
+  Path where generated output file is placed. Defaults to current directory. Can also use `-d`.
+  
+  ```bash
+  jpackage --dest dist --input lib --main-jar app.jar --name MyApp
+  ```
+</ParamField>
+
+<ParamField path="--type" type="package-type">
+  Type of package to create. Can also use `-t`.
+  
+  ```bash
+  jpackage --type deb --input lib --main-jar app.jar --name MyApp
+  ```
+</ParamField>
+
+### Application Content
+
+<ParamField path="--main-jar" type="jar-file">
+  Main JAR of the application; contains the main class.
+  
+  ```bash
+  jpackage --input lib --main-jar myapp-1.0.jar --main-class com.example.Main
+  ```
+</ParamField>
+
+<ParamField path="--main-class" type="class-name">
+  Qualified name of the application main class to execute.
+  
+  ```bash
+  jpackage --input lib --main-jar app.jar --main-class com.example.Main
+  ```
+</ParamField>
+
+<ParamField path="--module" type="module-name[/main-class]">
+  Main module and optionally main class of the application. Can also use `-m`.
+  
+  ```bash
+  jpackage --module-path mods --module com.example.app/com.example.Main
+  ```
+</ParamField>
+
+<ParamField path="--module-path" type="path">
+  Path where modules are located. Can also use `-p`.
+  
+  ```bash
+  jpackage --module-path mods:$JAVA_HOME/jmods \
+           --module com.example.app \
+           --name MyApp
+  ```
+</ParamField>
+
+### Runtime
+
+<ParamField path="--runtime-image" type="directory">
+  Path of the predefined runtime image to use (created by jlink).
+  
+  ```bash
+  # First create runtime with jlink
+  jlink --module-path mods --add-modules com.example.app --output app-runtime
+  
+  # Then package it
+  jpackage --runtime-image app-runtime --name MyApp
+  ```
+</ParamField>
+
+<ParamField path="--add-modules" type="module-list">
+  Comma-separated list of modules to add.
+  
+  ```bash
+  jpackage --module-path mods \
+           --add-modules com.example.app,java.sql,java.naming \
+           --name MyApp
+  ```
+</ParamField>
+
+### Java Options
+
+<ParamField path="--java-options" type="option-list">
+  Options to pass to the Java runtime.
+  
+  ```bash
+  jpackage --input lib --main-jar app.jar \
+           --java-options '-Xmx2g -Xms512m -Dapp.debug=true' \
+           --name MyApp
+  ```
+</ParamField>
+
+<ParamField path="--arguments" type="argument-list">
+  Command line arguments to pass to the main class if no arguments are specified by the launcher.
+  
+  ```bash
+  jpackage --input lib --main-jar app.jar \
+           --arguments '--config=/etc/myapp/config.xml' \
+           --name MyApp
+  ```
+</ParamField>
+
+<ParamField path="--jlink-options" type="option-list">
+  Options to pass to jlink when creating the runtime image.
+  
+  ```bash
+  jpackage --module-path mods --module com.example.app \
+           --jlink-options '--strip-debug --compress=2' \
+           --name MyApp
+  ```
+</ParamField>
+
+## Visual Customization
+
+<ParamField path="--icon" type="file">
+  Path to the icon file for the application.
+  
+  - Linux: PNG file
+  - Windows: ICO file
+  - macOS: ICNS file
+  
+  ```bash
+  jpackage --input lib --main-jar app.jar \
+           --icon resources/app-icon.png \
+           --name MyApp
+  ```
+</ParamField>
+
+<ParamField path="--resource-dir" type="directory">
+  Path to directory containing resources for the application.
+  
+  ```bash
+  jpackage --input lib --main-jar app.jar \
+           --resource-dir resources \
+           --name MyApp
+  ```
+</ParamField>
+
+<ParamField path="--license-file" type="file">
+  Path to the license file.
+  
+  ```bash
+  jpackage --input lib --main-jar app.jar \
+           --license-file LICENSE.txt \
+           --name MyApp
+  ```
+</ParamField>
+
+## Platform-Specific Options
+
+<Tabs>
+  <Tab title="Linux">
+    <ParamField path="--linux-package-name" type="string">
+      Name for the Linux package (defaults to application name).
+      
+      ```bash
+      jpackage --type deb --linux-package-name myapp-suite \
+               --input lib --main-jar app.jar
+      ```
+    </ParamField>
+    
+    <ParamField path="--linux-deb-maintainer" type="email">
+      Maintainer for DEB package.
+      
+      ```bash
+      jpackage --type deb --linux-deb-maintainer admin@example.com \
+               --input lib --main-jar app.jar --name MyApp
+      ```
+    </ParamField>
+    
+    <ParamField path="--linux-rpm-license-type" type="string">
+      Type of license for RPM package.
+      
+      ```bash
+      jpackage --type rpm --linux-rpm-license-type "Apache-2.0" \
+               --input lib --main-jar app.jar --name MyApp
+      ```
+    </ParamField>
+    
+    <ParamField path="--linux-app-category" type="category">
+      Application category for Linux package.
+      
+      ```bash
+      jpackage --type deb --linux-app-category "Development" \
+               --input lib --main-jar app.jar --name MyApp
+      ```
+    </ParamField>
+    
+    <ParamField path="--linux-shortcut" type="none">
+      Create a desktop shortcut for the application.
+      
+      ```bash
+      jpackage --type deb --linux-shortcut \
+               --input lib --main-jar app.jar --name MyApp
+      ```
+    </ParamField>
+  </Tab>
+  
+  <Tab title="Windows">
+    <ParamField path="--win-dir-chooser" type="none">
+      Add a dialog to enable the user to choose installation directory.
+      
+      ```bash
+      jpackage --type msi --win-dir-chooser \
+               --input lib --main-jar app.jar --name MyApp
+      ```
+    </ParamField>
+    
+    <ParamField path="--win-menu" type="none">
+      Add application to system menu.
+      
+      ```bash
+      jpackage --type exe --win-menu \
+               --input lib --main-jar app.jar --name MyApp
+      ```
+    </ParamField>
+    
+    <ParamField path="--win-menu-group" type="string">
+      Start Menu group for the application.
+      
+      ```bash
+      jpackage --type exe --win-menu --win-menu-group "Example Apps" \
+               --input lib --main-jar app.jar --name MyApp
+      ```
+    </ParamField>
+    
+    <ParamField path="--win-shortcut" type="none">
+      Create desktop shortcut for the application.
+      
+      ```bash
+      jpackage --type msi --win-shortcut \
+               --input lib --main-jar app.jar --name MyApp
+      ```
+    </ParamField>
+    
+    <ParamField path="--win-per-user-install" type="none">
+      Request per-user installation.
+      
+      ```bash
+      jpackage --type msi --win-per-user-install \
+               --input lib --main-jar app.jar --name MyApp
+      ```
+    </ParamField>
+  </Tab>
+  
+  <Tab title="macOS">
+    <ParamField path="--mac-package-identifier" type="string">
+      Unique identifier for macOS application.
+      
+      ```bash
+      jpackage --type dmg --mac-package-identifier com.example.myapp \
+               --input lib --main-jar app.jar --name MyApp
+      ```
+    </ParamField>
+    
+    <ParamField path="--mac-package-name" type="string">
+      Name of the application as it appears in the menu bar.
+      
+      ```bash
+      jpackage --type pkg --mac-package-name "My Application" \
+               --input lib --main-jar app.jar --name MyApp
+      ```
+    </ParamField>
+    
+    <ParamField path="--mac-app-category" type="category">
+      macOS application category.
+      
+      ```bash
+      jpackage --type dmg --mac-app-category public.app-category.developer-tools \
+               --input lib --main-jar app.jar --name MyApp
+      ```
+    </ParamField>
+    
+    <ParamField path="--mac-sign" type="none">
+      Request signing of the package.
+      
+      ```bash
+      jpackage --type pkg --mac-sign \
+               --mac-signing-key-user-name "Developer ID Application: Company" \
+               --input lib --main-jar app.jar --name MyApp
+      ```
+    </ParamField>
+  </Tab>
+</Tabs>
+
+## Common Usage Examples
+
+### Simple JAR Application
+
+```bash
+# Package a simple JAR application
+jpackage --input target \
+         --name MyApp \
+         --main-jar myapp-1.0.jar \
+         --main-class com.example.Main \
+         --type deb \
+         --app-version 1.0
+```
+
+### Modular Application
+
+```bash
+# Package a modular application
+jpackage --type dmg \
+         --name MyModularApp \
+         --module-path mods:$JAVA_HOME/jmods \
+         --module com.example.myapp/com.example.Main \
+         --app-version 2.0 \
+         --vendor "Example Corp" \
+         --icon resources/app.icns
+```
+
+### Using Custom Runtime
+
+```bash
+# Create custom runtime with jlink
+jlink --module-path $JAVA_HOME/jmods:mods \
+      --add-modules com.example.app \
+      --strip-debug \
+      --compress 2 \
+      --output custom-runtime
+
+# Package with the custom runtime
+jpackage --runtime-image custom-runtime \
+         --name MyApp \
+         --type exe \
+         --app-version 1.0 \
+         --win-menu \
+         --win-shortcut
+```
+
+### Production Package with All Options
+
+```bash
+jpackage --type deb \
+         --input target/lib \
+         --main-jar myapp-1.0.jar \
+         --main-class com.example.Application \
+         --name MyApplication \
+         --app-version 1.0.5 \
+         --vendor "Example Corporation" \
+         --description "My awesome Java application" \
+         --copyright "Copyright (c) 2026 Example Corp" \
+         --icon resources/icon.png \
+         --license-file LICENSE \
+         --java-options '-Xmx4g -XX:+UseG1GC' \
+         --arguments '--config=/etc/myapp/app.conf' \
+         --linux-package-name myapp \
+         --linux-deb-maintainer maintainer@example.com \
+         --linux-app-category "Development" \
+         --linux-shortcut \
+         --dest dist
+```
+
+### Multi-Launcher Application
+
+```bash
+jpackage --input lib \
+         --main-jar app.jar \
+         --main-class com.example.Main \
+         --name MyApp \
+         --add-launcher admin=admin-launcher.properties \
+         --add-launcher cli=cli-launcher.properties
+```
+
+Where `admin-launcher.properties` contains:
+```properties
+main-class=com.example.AdminMain
+java-options=-Xmx1g
+arguments=--admin-mode
+```
+
+## Additional Options
+
+<ParamField path="--verbose" type="none">
+  Enable verbose output.
+  
+  ```bash
+  jpackage --verbose --input lib --main-jar app.jar --name MyApp
+  ```
+</ParamField>
+
+<ParamField path="--temp" type="directory">
+  Path to temporary directory for building.
+  
+  ```bash
+  jpackage --temp /tmp/jpackage-build --input lib --main-jar app.jar
+  ```
+</ParamField>
+
+<ParamField path="--about-url" type="url">
+  URL of the application's home page.
+  
+  ```bash
+  jpackage --about-url https://example.com/myapp \
+           --input lib --main-jar app.jar --name MyApp
+  ```
+</ParamField>
+
+<ParamField path="--app-image" type="directory">
+  Location of the predefined application image used to build an installable package.
+  
+  ```bash
+  # First create app image
+  jpackage --type app-image --input lib --main-jar app.jar --name MyApp
+  
+  # Then create installer from it
+  jpackage --type deb --app-image MyApp
+  ```
+</ParamField>
+
+## File Associations
+
+```bash
+jpackage --input lib \
+         --main-jar editor.jar \
+         --file-associations file-assoc.properties
+```
+
+Where `file-assoc.properties` contains:
+```properties
+extension=txt
+mime-type=text/plain
+description=Text File
+icon=text-icon.png
+```
+
+<Info>
+When packaging modular applications, jpackage can automatically invoke jlink to create an optimized runtime. Use `--jlink-options` to pass optimization flags like `--strip-debug` and `--compress`.
+</Info>
+
+<Note>
+On Linux, you need either `dpkg-deb` (for DEB) or `rpmbuild` (for RPM) installed on your system. On macOS, code signing requires a valid Developer ID certificate.
+</Note>
+
+## Information Options
+
+<ParamField path="--help" type="none">
+  Print help message. Can also use `-h` or `-?`.
+  
+  ```bash
+  jpackage --help
+  ```
+</ParamField>
+
+<ParamField path="--version" type="none">
+  Print version information.
+  
+  ```bash
+  jpackage --version
+  ```
+</ParamField>
+
+## Exit Codes
+
+- `0`: Successful packaging
+- `1`: Packaging failed
+
+## See Also
+
+- [jlink](/tools/jlink) - Java linker
+- [javac](/tools/javac) - Java compiler
+- [jar](https://docs.oracle.com/en/java/javase/21/docs/specs/man/jar.html) - JAR tool

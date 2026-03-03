@@ -1,0 +1,161 @@
+---
+title: "java.base Module"
+description: "Core module providing foundational APIs of the Java SE Platform"
+---
+
+## Overview
+
+The `java.base` module is the foundational module of the Java SE Platform. It defines essential APIs that all Java applications depend on. This module is implicitly required by all other modules.
+
+```java
+module java.base {
+    exports java.io;
+    exports java.lang;
+    exports java.lang.annotation;
+    exports java.lang.constant;
+    exports java.lang.invoke;
+    exports java.lang.module;
+    exports java.lang.ref;
+    exports java.lang.reflect;
+    exports java.math;
+    exports java.net;
+    exports java.nio;
+    exports java.nio.channels;
+    exports java.nio.charset;
+    exports java.nio.file;
+    exports java.security;
+    exports java.text;
+    exports java.time;
+    exports java.util;
+    exports java.util.concurrent;
+    exports java.util.function;
+    exports java.util.stream;
+    // ... and more
+}
+```
+
+## Key Packages
+
+The java.base module contains several critical packages that form the foundation of Java development:
+
+<Tabs>
+  <Tab title="Core Language">
+    ### java.lang Package
+    
+    Provides classes fundamental to the design of the Java programming language:
+    - **Object** - Root of the class hierarchy
+    - **String** - Immutable character sequences
+    - **Class** - Runtime class representation
+    - **System** - System facilities and standard I/O
+    - **Thread** - Concurrency primitives
+    - **Math** - Mathematical operations
+    
+    [View java.lang API →](/api/java-lang)
+  </Tab>
+  
+  <Tab title="Collections & Utilities">
+    ### java.util Package
+    
+    Contains the collections framework, date/time facilities, and various utility classes:
+    - **Collection Framework** - List, Set, Map interfaces and implementations
+    - **Stream API** - Functional-style operations on collections
+    - **Date/Time** - Date, Calendar, TimeZone
+    - **Utilities** - Optional, Objects, Arrays, Collections
+    
+    [View java.util API →](/api/java-util)
+  </Tab>
+  
+  <Tab title="I/O">
+    ### java.io Package
+    
+    Provides system input and output through data streams, serialization, and the file system:
+    - **Streams** - InputStream, OutputStream, Reader, Writer
+    - **Files** - File, RandomAccessFile
+    - **Serialization** - ObjectInputStream, ObjectOutputStream
+    - **Buffering** - BufferedInputStream, BufferedReader
+    
+    [View java.io API →](/api/java-io)
+  </Tab>
+</Tabs>
+
+## Module Features
+
+<Accordion title="Service Providers">
+  The java.base module provides implementations of several service provider interfaces:
+  
+  - **FileSystemProvider** - jrt file system for run-time image access
+  - **CharsetProvider** - Character encoding providers
+  - **SelectorProvider** - Non-blocking I/O selectors
+  - **TimeZoneNameProvider** - Time zone naming
+</Accordion>
+
+<Accordion title="Module Dependencies">
+  The java.base module is the root module and has no dependencies. All other modules implicitly depend on java.base:
+  
+  ```java
+  // Every module implicitly includes:
+  requires java.base;
+  ```
+  
+  You never need to explicitly declare a dependency on java.base.
+</Accordion>
+
+<Accordion title="Platform Integration">
+  The module provides deep integration with the JVM and operating system:
+  
+  - Native method support
+  - Reflection and introspection
+  - Class loading mechanisms
+  - Security manager integration
+  - System property access
+  - Environment variable access
+</Accordion>
+
+## Usage Example
+
+Since java.base is implicit, you can use its APIs without any module declaration:
+
+```java
+import java.util.List;
+import java.util.ArrayList;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+public class Example {
+    public static void main(String[] args) throws IOException {
+        // java.lang - automatically imported
+        String message = "Hello, Java!";
+        System.out.println(message);
+        
+        // java.util - Collections
+        List<String> items = new ArrayList<>();
+        items.add("Item 1");
+        items.add("Item 2");
+        
+        // java.util.stream - Functional operations
+        items.stream()
+             .filter(s -> s.contains("1"))
+             .forEach(System.out::println);
+        
+        // java.nio.file - Modern file I/O
+        Path path = Path.of("example.txt");
+        Files.writeString(path, "Content");
+        String content = Files.readString(path);
+    }
+}
+```
+
+## Historical Notes
+
+The java.base module was introduced in Java 9 as part of the Java Platform Module System (JPMS). It consolidates APIs that were previously part of the monolithic rt.jar in Java 8 and earlier.
+
+<Note>
+  The java.base module is always present and accessible. It cannot be excluded from the module graph.
+</Note>
+
+## Related Documentation
+
+- [java.lang Package](/api/java-lang) - Core language classes
+- [java.util Package](/api/java-util) - Collections and utilities
+- [java.io Package](/api/java-io) - Input/output operations

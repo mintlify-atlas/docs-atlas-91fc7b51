@@ -1,0 +1,384 @@
+---
+title: "Garbage Collection"
+description: "GC algorithms and implementations in OpenJDK including G1, ZGC, Shenandoah, Serial, and Parallel collectors"
+---
+
+OpenJDK includes multiple garbage collector implementations, each optimized for different workload characteristics and latency requirements. All collectors inherit from the abstract `CollectedHeap` class.
+
+## Available Collectors
+
+HotSpot provides five production-ready garbage collectors, all located in `src/hotspot/share/gc/`:
+
+<CardGroup cols={2}>
+  <Card title="Serial GC" icon="lines-leaning">
+    Single-threaded collector for small applications
+  </Card>
+  <Card title="Parallel GC" icon="layer-group">
+    Throughput-focused multi-threaded collector
+  </Card>
+  <Card title="G1 GC" icon="table-cells">
+    Region-based low-latency collector (default)
+  </Card>
+  <Card title="ZGC" icon="rocket">
+    Scalable ultra-low latency collector
+  </Card>
+  <Card title="Shenandoah" icon="gauge-high">
+    Concurrent low-pause collector
+  </Card>
+  <Card title="Epsilon" icon="ban">
+    No-op collector for testing (no actual collection)
+  </Card>
+</CardGroup>
+
+## G1 Garbage Collector
+
+The Garbage-First (G1) collector is the default in modern JDK releases. Implementation: `src/hotspot/share/gc/g1/`
+
+### Architecture
+
+From `g1CollectedHeap.hpp`:
+
+> "A G1CollectedHeap is an implementation of a java heap for HotSpot. It uses the Garbage First heap organization and algorithm, which may combine concurrent marking with parallel, incremental compaction of heap subsets that will yield large amounts of garbage."
+
+### Region-Based Heap
+
+G1 divides the heap into fixed-size regions (1-32MB):
+
+- **Eden regions** - Young generation allocation targets
+- **Survivor regions** - Objects that survived one GC
+- **Old regions** - Long-lived objects
+- **Humongous regions** - Large objects (> 50% of region size)
+
+<Info>
+Regions allow G1 to collect portions of the heap incrementally, meeting pause time goals while maximizing throughput.
+</Info>
+
+### Key Components
+
+The G1 implementation includes:
+
+```cpp
+// From g1CollectedHeap.hpp:
+class G1CollectedHeap : public CollectedHeap {
+  G1ConcurrentMark*      _concurrent_mark;
+  G1HeapRegionManager*   _hrm;
+  G1CollectionSet*       _collection_set;
+  G1RemSet*              _rem_set;
+  G1ConcurrentRefine*    _concurrent_refine;
+  G1Allocator*           _allocator;
+  // ...
+};
+```
+
+**G1ConcurrentMark** - Concurrent marking of live objects  
+**G1HeapRegionManager** - Region allocation and tracking  
+**G1CollectionSet** - Regions selected for collection  
+**G1RemSet** - Remembered set for cross-region references  
+**G1ConcurrentRefine** - Concurrent refinement of card tables  
+
+### Collection Phases
+
+<Tabs>
+  <Tab title="Young Collection">
+    Collects Eden and Survivor regions:
+    
+    1. **Root Scanning** - Scan thread stacks, static fields, JNI
+    2. **Update RS** - Process dirty cards from concurrent refinement
+    3. **Scan RS** - Scan remembered sets for cross-region references
+    4. **Object Copy** - Evacuate live objects to survivor/old regions
+    5. **Reference Processing** - Handle weak/soft/phantom references
+    6. **Region Cleanup** - Reclaim empty regions
+
+    Fully stop-the-world but parallelized across GC threads.
+  </Tab>
+  <Tab title="Concurrent Marking">
+    Identifies live objects throughout the heap:
+    
+    1. **Initial Mark** (STW) - Mark from roots, piggybacks on young GC
+    2. **Concurrent Mark** - Traverse object graph concurrently
+    3. **Remark** (STW) - Finalize marking using SATB queues
+    4. **Cleanup** (STW) - Identify empty regions, prepare for mixed GC
+
+    Uses Snapshot-At-The-Beginning (SATB) algorithm to maintain marking correctness.
+  </Tab>
+  <Tab title="Mixed Collection">
+    Collects both young and old regions:
+    
+    - Occurs after concurrent marking completes
+    - Selects old regions with most garbage ("Garbage First")
+    - Number of old regions bounded to meet pause target
+    - Continues until old region occupancy drops sufficiently
+  </Tab>
+</Tabs>
+
+### Card Tables and Remembered Sets
+
+G1 uses card tables (`g1CardTable.hpp`) and card sets (`g1CardSet.hpp`) to track cross-region references:
+
+- Heap divided into 512-byte cards
+- Modified cards tracked in per-region remembered sets
+- Concurrent refinement threads process cards asynchronously
+- Reduces young GC scanning to only relevant old regions
+
+## Z Garbage Collector
+
+ZGC is a scalable, low-latency garbage collector introduced in Java 11. Implementation: `src/hotspot/share/gc/z/`
+
+### Design Goals
+
+From `zCollectedHeap.hpp`:
+
+```cpp
+class ZCollectedHeap : public CollectedHeap {
+  ZHeap             _heap;
+  ZDriverMinor*     _driver_minor;  // Generational ZGC support
+  ZDriverMajor*     _driver_major;
+  ZDirector*        _director;      // Adaptive heuristics
+  ZRuntimeWorkers   _runtime_workers;
+  // ...
+};
+```
+
+ZGC targets:
+- **Sub-millisecond pause times** - Maximum 1ms pauses
+- **Terabyte+ heaps** - Scales to multi-TB heap sizes  
+- **Minimal throughput overhead** - < 15% vs. Parallel GC
+
+### Colored Pointers
+
+ZGC uses pointer metadata (colored pointers) to track object state:
+
+```
+64-bit pointer layout:
++------------------------+-------+
+| Object Address (42bit) | Metadata (4bit) | Unused (18bit) |
++------------------------+-------+
+     ↑                        ↑
+  Actual address         Marking/Relocation/Remapped bits
+```
+
+Metadata bits encode:
+- **Marked0/Marked1** - Concurrent marking state
+- **Remapped** - Whether pointer has been updated
+- **Finalizable** - Object has finalizer
+
+<Note>
+Colored pointers enable concurrent relocation without read barriers, using load barriers instead to heal references on access.
+</Note>
+
+### Load Barriers
+
+ZGC uses load barriers to maintain correctness during concurrent operations:
+
+```java
+// User code:
+Object obj = field.value;
+
+// With load barrier:
+Object obj = load_barrier(field.value);
+  // Barrier checks pointer metadata
+  // Heals pointer if needed (marking/relocation)
+  // Returns correct reference
+```
+
+Load barriers are JIT-compiled inline, minimizing overhead.
+
+### Collection Phases
+
+ZGC performs most work concurrently:
+
+1. **Pause Mark Start** (< 1ms) - Scan thread roots
+2. **Concurrent Mark** - Traverse object graph  
+3. **Pause Mark End** (< 1ms) - Finalize marking
+4. **Concurrent Reference Processing** - Process weak references
+5. **Concurrent Relocation Preparation** - Select pages to relocate
+6. **Pause Relocate Start** (< 1ms) - Relocate roots
+7. **Concurrent Relocation** - Move objects, remap references
+
+### Generational ZGC
+
+Recent versions include generational support (`_driver_minor` / `_driver_major`):
+
+- Young generation for recently allocated objects
+- Old generation for long-lived objects  
+- Reduces marking overhead for stable heaps
+- Further improves throughput
+
+## Shenandoah Collector
+
+Shenandoah is a low-pause collector developed by Red Hat. Implementation: `src/hotspot/share/gc/shenandoah/`
+
+### Architecture
+
+From `shenandoahHeap.hpp`:
+
+```cpp
+class ShenandoahHeap : public CollectedHeap {
+  ShenandoahMode*             _mode;            // GC mode (satb/iu/passive)
+  ShenandoahController*       _controller;
+  ShenandoahConcurrentMark*   _concurrent_mark;
+  ShenandoahFreeSet*          _free_set;
+  ShenandoahPacer*            _pacer;           // Allocation pacing
+  ShenandoahVerifier*         _verifier;
+  // ...
+};
+```
+
+### Forwarding Pointers
+
+Shenandoah uses a different approach than ZGC:
+
+- **Brooks pointers** - Indirection pointer at object start
+- Objects have a forwarding pointer field
+- During relocation, pointers updated to new location  
+- Read barriers check and follow forwarding pointers
+
+### Liveness Data
+
+From the source comments:
+
+```cpp
+// Used for buffering per-region liveness data.
+// uint16_t provides tradeoff between static/dynamic footprint
+// and cache pressure during marking.
+typedef uint16_t ShenandoahLiveData;
+#define SHENANDOAH_LIVEDATA_MAX ((ShenandoahLiveData)-1)
+```
+
+Liveness tracked per region with 16-bit counters to balance memory usage and atomic update overhead.
+
+### Collection Modes
+
+<Tabs>
+  <Tab title="SATB Mode">
+    Snapshot-At-The-Beginning concurrent marking:
+    
+    - Similar to G1's SATB approach
+    - Concurrent mark from snapshot
+    - Write barriers maintain SATB invariant
+    - Default and most mature mode
+  </Tab>
+  <Tab title="IU Mode">
+    Incremental Update marking:
+    
+    - Tracks new references during marking
+    - May reduce final pause time
+    - Alternative marking algorithm
+  </Tab>
+  <Tab title="Passive Mode">
+    Degenerated GC mode:
+    
+    - Falls back to stop-the-world collection
+    - Used when concurrent collection can't keep up
+    - Prevents allocation failure
+  </Tab>
+</Tabs>
+
+### Evacuation and Pacing
+
+Key differentiators:
+
+- **Concurrent Evacuation** - Moves objects while application runs
+- **Allocation Pacing** - Throttles allocation when GC can't keep up
+- **Generational Support** - Young and old generations (`ShenandoahYoungGeneration`, `ShenandoahOldGeneration`)
+
+## Serial Collector
+
+The simplest collector, using single-threaded mark-compact algorithm. Located in `src/hotspot/share/gc/serial/`.
+
+**Use Cases:**
+- Single-CPU systems  
+- Small heaps (< 100MB)
+- Batch jobs where pause time doesn't matter
+- Minimal memory footprint required
+
+**Algorithm:**
+1. Mark live objects from roots
+2. Compute forwarding addresses
+3. Update all references
+4. Move objects to compacted locations
+
+Entirely stop-the-world, but has minimal overhead and memory footprint.
+
+## Parallel Collector
+
+Multi-threaded throughput-oriented collector. Located in `src/hotspot/share/gc/parallel/`.
+
+**Generations:**
+- Young generation - Parallel Scavenge
+- Old generation - Parallel Mark-Compact
+
+**Optimization:**
+- Maximum throughput prioritized over latency
+- Adaptive sizing based on throughput/pause goals
+- Excellent for batch processing and computations
+
+**Trade-offs:**
+- Longer pause times than G1/ZGC/Shenandoah
+- Better throughput on multi-core systems
+- Simpler than region-based collectors
+
+## Epsilon Collector
+
+A no-op collector that never reclaims memory. Located in `src/hotspot/share/gc/epsilon/`.
+
+**Purpose:**
+- Performance testing and benchmarking
+- Ultra-short-lived applications
+- Measuring GC overhead
+- Testing GC interface contracts
+
+<Note>
+Epsilon will eventually run out of memory. It's only suitable for testing or applications with known bounded allocation.
+</Note>
+
+## Shared GC Infrastructure
+
+All collectors use common infrastructure from `src/hotspot/share/gc/shared/`:
+
+### Barrier Sets
+
+Memory barriers for maintaining GC invariants:
+- `CardTableBarrierSet` - Card marking for generational collectors
+- `G1BarrierSet` - SATB and card marking for G1
+- `ShenandoahBarrierSet` - Brooks pointer barriers
+- `ZBarrierSet` - Load barriers for ZGC
+
+### Work Queues
+
+Parallel GC work distribution:
+```cpp
+typedef OverflowTaskQueue<ScannerTask, mtGC>  G1ScannerTasksQueue;
+typedef GenericTaskQueueSet<G1ScannerTasksQueue, mtGC> G1ScannerTasksQueueSet;
+```
+
+Work-stealing queues balance load across GC threads.
+
+### Reference Processing
+
+Handling of weak/soft/phantom references:
+- Discovered during marking
+- Processed at end of GC cycle
+- Notifications enqueued for application
+- Implemented in `referenceProcessor.hpp`
+
+## Selecting a Collector
+
+| Collector | Flag | Best For | Pause Time | Throughput |
+|-----------|------|----------|------------|------------|
+| **G1** | `-XX:+UseG1GC` | General purpose, balanced | 10-200ms | Good |
+| **ZGC** | `-XX:+UseZGC` | Large heaps, low latency | < 1ms | Good |
+| **Shenandoah** | `-XX:+UseShenandoahGC` | Low latency | < 10ms | Good |
+| **Parallel** | `-XX:+UseParallelGC` | Throughput, batch | 100ms-10s | Excellent |
+| **Serial** | `-XX:+UseSerialGC` | Small heaps, single CPU | 10ms-1s | Poor |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="HotSpot VM" href="/architecture/hotspot-vm">
+    Return to VM architecture overview
+  </Card>
+  <Card title="JIT Compiler" href="/architecture/jit-compiler">
+    Explore JIT compilation system
+  </Card>
+</CardGroup>

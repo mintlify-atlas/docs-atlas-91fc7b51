@@ -1,0 +1,618 @@
+---
+title: "java.lang Package"
+description: "Fundamental classes essential to the Java programming language"
+---
+
+## Overview
+
+The `java.lang` package provides classes fundamental to the design of the Java programming language. This package is automatically imported into every Java source file (`import java.lang.*` is implicit).
+
+## Core Classes
+
+### Object Class
+
+The root of the Java class hierarchy. Every class has `Object` as a superclass.
+
+<Accordion title="Object Methods">
+  <ResponseField name="getClass()" type="Class<?>">
+    Returns the runtime class of this object.
+    
+    ```java
+    Object obj = "Hello";
+    Class<?> clazz = obj.getClass(); // Returns String.class
+    ```
+  </ResponseField>
+  
+  <ResponseField name="hashCode()" type="int">
+    Returns a hash code value for the object. Objects that are equal according to `equals()` must have the same hash code.
+    
+    ```java
+    String s = "example";
+    int hash = s.hashCode();
+    ```
+  </ResponseField>
+  
+  <ResponseField name="equals(Object obj)" type="boolean">
+    Indicates whether some other object is "equal to" this one. The default implementation compares object references.
+    
+    ```java
+    String s1 = new String("test");
+    String s2 = new String("test");
+    boolean equal = s1.equals(s2); // true
+    ```
+  </ResponseField>
+  
+  <ResponseField name="toString()" type="String">
+    Returns a string representation of the object. The default implementation returns `getClass().getName() + "@" + Integer.toHexString(hashCode())`.
+    
+    ```java
+    Object obj = new Object();
+    String str = obj.toString(); // "java.lang.Object@1a2b3c4d"
+    ```
+  </ResponseField>
+  
+  <ResponseField name="clone()" type="Object">
+    Creates and returns a copy of this object. Requires implementing `Cloneable` interface.
+    
+    ```java
+    class Person implements Cloneable {
+        protected Object clone() throws CloneNotSupportedException {
+            return super.clone();
+        }
+    }
+    ```
+  </ResponseField>
+</Accordion>
+
+<Accordion title="Thread Synchronization Methods">
+  <ResponseField name="wait()" type="void">
+    Causes current thread to wait until another thread invokes `notify()` or `notifyAll()` on this object.
+    
+    ```java
+    synchronized (obj) {
+        while (!condition) {
+            obj.wait();
+        }
+        // Perform action
+    }
+    ```
+  </ResponseField>
+  
+  <ResponseField name="wait(long timeoutMillis)" type="void">
+    Waits for at most the specified number of milliseconds.
+  </ResponseField>
+  
+  <ResponseField name="notify()" type="void">
+    Wakes up a single thread waiting on this object's monitor.
+  </ResponseField>
+  
+  <ResponseField name="notifyAll()" type="void">
+    Wakes up all threads waiting on this object's monitor.
+  </ResponseField>
+</Accordion>
+
+### String Class
+
+Represents immutable character strings. All string literals are instances of this class.
+
+```java
+public final class String
+    implements Serializable, Comparable<String>, CharSequence,
+               Constable, ConstantDesc
+```
+
+<Accordion title="String Construction & Basics">
+  Strings are immutable - their values cannot be changed after creation.
+  
+  ```java
+  // String literals
+  String str1 = "abc";
+  
+  // Constructor
+  char[] data = {'a', 'b', 'c'};
+  String str2 = new String(data);
+  
+  // Concatenation
+  String result = "Hello" + " " + "World";
+  ```
+  
+  <Note>
+    String objects are immutable and can be shared. String literals are interned in the string pool.
+  </Note>
+</Accordion>
+
+<Accordion title="Key String Methods">
+  <ResponseField name="length()" type="int">
+    Returns the number of characters in the string.
+    
+    ```java
+    "hello".length(); // Returns 5
+    ```
+  </ResponseField>
+  
+  <ResponseField name="charAt(int index)" type="char">
+    Returns the character at the specified index.
+    
+    ```java
+    "hello".charAt(1); // Returns 'e'
+    ```
+  </ResponseField>
+  
+  <ResponseField name="substring(int beginIndex, int endIndex)" type="String">
+    Returns a substring from beginIndex (inclusive) to endIndex (exclusive).
+    
+    ```java
+    "hello world".substring(0, 5); // Returns "hello"
+    ```
+  </ResponseField>
+  
+  <ResponseField name="contains(CharSequence s)" type="boolean">
+    Returns true if the string contains the specified sequence.
+    
+    ```java
+    "hello world".contains("world"); // true
+    ```
+  </ResponseField>
+  
+  <ResponseField name="startsWith(String prefix)" type="boolean">
+    Tests if the string starts with the specified prefix.
+  </ResponseField>
+  
+  <ResponseField name="endsWith(String suffix)" type="boolean">
+    Tests if the string ends with the specified suffix.
+  </ResponseField>
+  
+  <ResponseField name="indexOf(String str)" type="int">
+    Returns the index of the first occurrence of the specified substring, or -1 if not found.
+  </ResponseField>
+  
+  <ResponseField name="toLowerCase()" type="String">
+    Converts all characters to lowercase.
+  </ResponseField>
+  
+  <ResponseField name="toUpperCase()" type="String">
+    Converts all characters to uppercase.
+  </ResponseField>
+  
+  <ResponseField name="trim()" type="String">
+    Returns a string with leading and trailing whitespace removed.
+  </ResponseField>
+  
+  <ResponseField name="replace(char oldChar, char newChar)" type="String">
+    Returns a string with all occurrences of oldChar replaced by newChar.
+  </ResponseField>
+  
+  <ResponseField name="split(String regex)" type="String[]">
+    Splits the string around matches of the given regular expression.
+    
+    ```java
+    String[] parts = "a,b,c".split(","); // ["a", "b", "c"]
+    ```
+  </ResponseField>
+</Accordion>
+
+<Accordion title="String Comparison">
+  Java provides multiple ways to compare strings:
+  
+  <ResponseField name="equals(Object obj)" type="boolean">
+    Exact content equality - checks identical char sequence (case-sensitive).
+    
+    ```java
+    "hello".equals("hello"); // true
+    "hello".equals("Hello"); // false
+    ```
+  </ResponseField>
+  
+  <ResponseField name="equalsIgnoreCase(String str)" type="boolean">
+    Simple case-insensitive equality check.
+    
+    ```java
+    "hello".equalsIgnoreCase("HELLO"); // true
+    ```
+  </ResponseField>
+  
+  <ResponseField name="compareTo(String str)" type="int">
+    Lexicographically compares two strings. Returns negative if this string is less than the argument, zero if equal, positive if greater.
+    
+    ```java
+    "apple".compareTo("banana"); // negative number
+    "banana".compareTo("apple"); // positive number
+    "apple".compareTo("apple");  // 0
+    ```
+  </ResponseField>
+</Accordion>
+
+### Class Class
+
+Instances of `Class` represent classes and interfaces in a running Java application.
+
+```java
+public final class Class<T>
+    implements Serializable, GenericDeclaration, Type, AnnotatedElement,
+               TypeDescriptor.OfField<Class<?>>, Constable
+```
+
+<Accordion title="Obtaining Class Objects">
+  ```java
+  // Using class literal
+  Class<String> clazz1 = String.class;
+  
+  // Using Object.getClass()
+  String str = "example";
+  Class<?> clazz2 = str.getClass();
+  
+  // Using Class.forName()
+  Class<?> clazz3 = Class.forName("java.lang.String");
+  ```
+</Accordion>
+
+<Accordion title="Class Reflection Methods">
+  <ResponseField name="getName()" type="String">
+    Returns the fully qualified name of the class.
+    
+    ```java
+    String.class.getName(); // "java.lang.String"
+    ```
+  </ResponseField>
+  
+  <ResponseField name="getSimpleName()" type="String">
+    Returns the simple name of the class.
+    
+    ```java
+    String.class.getSimpleName(); // "String"
+    ```
+  </ResponseField>
+  
+  <ResponseField name="getSuperclass()" type="Class<? super T>">
+    Returns the superclass of this class.
+  </ResponseField>
+  
+  <ResponseField name="getInterfaces()" type="Class<?>[]">
+    Returns an array of interfaces implemented by this class.
+  </ResponseField>
+  
+  <ResponseField name="getMethods()" type="Method[]">
+    Returns all public methods of this class and its superclasses.
+  </ResponseField>
+  
+  <ResponseField name="getFields()" type="Field[]">
+    Returns all public fields of this class and its superclasses.
+  </ResponseField>
+  
+  <ResponseField name="newInstance()" type="T">
+    Creates a new instance of the class (deprecated - use Constructor.newInstance() instead).
+  </ResponseField>
+  
+  <ResponseField name="isInstance(Object obj)" type="boolean">
+    Determines if the specified object is assignment-compatible with this Class.
+  </ResponseField>
+</Accordion>
+
+### System Class
+
+Provides access to system facilities including standard I/O streams, environment variables, and system properties.
+
+```java
+public final class System
+```
+
+<Accordion title="Standard I/O Streams">
+  <ResponseField name="in" type="InputStream">
+    The standard input stream, typically connected to keyboard input.
+    
+    ```java
+    Scanner scanner = new Scanner(System.in);
+    String input = scanner.nextLine();
+    ```
+  </ResponseField>
+  
+  <ResponseField name="out" type="PrintStream">
+    The standard output stream, typically connected to console output.
+    
+    ```java
+    System.out.println("Hello, World!");
+    System.out.printf("Value: %d%n", 42);
+    ```
+  </ResponseField>
+  
+  <ResponseField name="err" type="PrintStream">
+    The standard error output stream for error messages.
+    
+    ```java
+    System.err.println("Error occurred!");
+    ```
+  </ResponseField>
+</Accordion>
+
+<Accordion title="System Methods">
+  <ResponseField name="currentTimeMillis()" type="long">
+    Returns current time in milliseconds since Unix epoch (January 1, 1970 00:00:00 UTC).
+    
+    ```java
+    long now = System.currentTimeMillis();
+    ```
+  </ResponseField>
+  
+  <ResponseField name="nanoTime()" type="long">
+    Returns the current value of the running JVM's high-resolution time source, in nanoseconds. Used for measuring elapsed time.
+    
+    ```java
+    long start = System.nanoTime();
+    // ... operation ...
+    long elapsed = System.nanoTime() - start;
+    ```
+  </ResponseField>
+  
+  <ResponseField name="arraycopy(Object src, int srcPos, Object dest, int destPos, int length)" type="void">
+    Copies an array from the specified source array to the destination array.
+    
+    ```java
+    int[] source = {1, 2, 3, 4, 5};
+    int[] dest = new int[5];
+    System.arraycopy(source, 0, dest, 0, 5);
+    ```
+  </ResponseField>
+  
+  <ResponseField name="getProperty(String key)" type="String">
+    Gets the system property indicated by the specified key.
+    
+    ```java
+    String javaVersion = System.getProperty("java.version");
+    String userHome = System.getProperty("user.home");
+    String osName = System.getProperty("os.name");
+    ```
+  </ResponseField>
+  
+  <ResponseField name="getenv(String name)" type="String">
+    Gets the value of the specified environment variable.
+    
+    ```java
+    String path = System.getenv("PATH");
+    ```
+  </ResponseField>
+  
+  <ResponseField name="exit(int status)" type="void">
+    Terminates the currently running JVM. Status code 0 indicates normal termination.
+    
+    ```java
+    System.exit(0); // Normal termination
+    System.exit(1); // Error termination
+    ```
+  </ResponseField>
+  
+  <ResponseField name="gc()" type="void">
+    Suggests that the JVM run the garbage collector (not guaranteed to run immediately).
+  </ResponseField>
+</Accordion>
+
+## Primitive Wrapper Classes
+
+<Tabs>
+  <Tab title="Integer">
+    Wrapper class for primitive `int` type.
+    
+    ```java
+    // Autoboxing and unboxing
+    Integer obj = 42;          // autoboxing
+    int value = obj;           // unboxing
+    
+    // Parsing
+    int num = Integer.parseInt("123");
+    Integer obj2 = Integer.valueOf("456");
+    
+    // Constants
+    int max = Integer.MAX_VALUE;  // 2147483647
+    int min = Integer.MIN_VALUE;  // -2147483648
+    
+    // Conversion
+    String str = Integer.toString(123);
+    String hex = Integer.toHexString(255); // "ff"
+    String binary = Integer.toBinaryString(8); // "1000"
+    ```
+  </Tab>
+  
+  <Tab title="Long">
+    Wrapper class for primitive `long` type.
+    
+    ```java
+    Long obj = 123456789L;
+    long value = Long.parseLong("9876543210");
+    
+    long max = Long.MAX_VALUE; // 9223372036854775807
+    long min = Long.MIN_VALUE;
+    ```
+  </Tab>
+  
+  <Tab title="Double">
+    Wrapper class for primitive `double` type.
+    
+    ```java
+    Double obj = 3.14159;
+    double value = Double.parseDouble("2.71828");
+    
+    double max = Double.MAX_VALUE;
+    double min = Double.MIN_VALUE;
+    
+    boolean isNaN = Double.isNaN(0.0 / 0.0);
+    boolean isInfinite = Double.isInfinite(1.0 / 0.0);
+    ```
+  </Tab>
+  
+  <Tab title="Boolean">
+    Wrapper class for primitive `boolean` type.
+    
+    ```java
+    Boolean obj = true;
+    boolean value = Boolean.parseBoolean("true");
+    
+    Boolean.TRUE;  // Boolean object for true
+    Boolean.FALSE; // Boolean object for false
+    ```
+  </Tab>
+</Tabs>
+
+## Exception Classes
+
+The java.lang package defines the exception hierarchy:
+
+```java
+Throwable
+├── Error (unchecked)
+│   ├── OutOfMemoryError
+│   ├── StackOverflowError
+│   └── ...
+└── Exception
+    ├── RuntimeException (unchecked)
+    │   ├── NullPointerException
+    │   ├── IllegalArgumentException
+    │   ├── IndexOutOfBoundsException
+    │   ├── ClassCastException
+    │   └── ...
+    └── Checked Exceptions
+        ├── InterruptedException
+        ├── CloneNotSupportedException
+        └── ...
+```
+
+## Other Important Classes
+
+<Accordion title="Math and StrictMath">
+  Mathematical functions and constants.
+  
+  ```java
+  // Constants
+  double pi = Math.PI;      // 3.141592653589793
+  double e = Math.E;        // 2.718281828459045
+  
+  // Basic operations
+  int max = Math.max(10, 20);           // 20
+  int min = Math.min(10, 20);           // 10
+  int abs = Math.abs(-10);              // 10
+  
+  // Rounding
+  long rounded = Math.round(3.7);       // 4
+  double ceil = Math.ceil(3.2);         // 4.0
+  double floor = Math.floor(3.9);       // 3.0
+  
+  // Power and roots
+  double pow = Math.pow(2, 8);          // 256.0
+  double sqrt = Math.sqrt(16);          // 4.0
+  double cbrt = Math.cbrt(27);          // 3.0
+  
+  // Trigonometry
+  double sin = Math.sin(Math.PI / 2);   // 1.0
+  double cos = Math.cos(0);             // 1.0
+  double tan = Math.tan(Math.PI / 4);   // ~1.0
+  
+  // Random
+  double random = Math.random();        // [0.0, 1.0)
+  ```
+</Accordion>
+
+<Accordion title="Thread">
+  Represents a thread of execution in a program.
+  
+  ```java
+  // Creating threads
+  Thread thread = new Thread(() -> {
+      System.out.println("Running in thread");
+  });
+  thread.start();
+  
+  // Thread operations
+  Thread.currentThread();        // Get current thread
+  Thread.sleep(1000);            // Sleep for 1 second
+  thread.join();                 // Wait for thread to complete
+  thread.interrupt();            // Interrupt the thread
+  
+  // Thread properties
+  thread.setName("MyThread");
+  String name = thread.getName();
+  thread.setPriority(Thread.MAX_PRIORITY);
+  boolean alive = thread.isAlive();
+  ```
+</Accordion>
+
+<Accordion title="StringBuilder and StringBuffer">
+  Mutable sequences of characters.
+  
+  ```java
+  // StringBuilder (not thread-safe, faster)
+  StringBuilder sb = new StringBuilder();
+  sb.append("Hello");
+  sb.append(" ");
+  sb.append("World");
+  sb.insert(5, ",");
+  sb.delete(0, 6);
+  String result = sb.toString();
+  
+  // StringBuffer (thread-safe, synchronized)
+  StringBuffer buffer = new StringBuffer("Initial");
+  buffer.append(" text");
+  ```
+</Accordion>
+
+## Usage Examples
+
+### Working with Objects
+
+```java
+public class Person {
+    private String name;
+    private int age;
+    
+    public Person(String name, int age) {
+        this.name = name;
+        this.age = age;
+    }
+    
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        Person person = (Person) obj;
+        return age == person.age && 
+               Objects.equals(name, person.name);
+    }
+    
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, age);
+    }
+    
+    @Override
+    public String toString() {
+        return "Person{name='" + name + "', age=" + age + "}";
+    }
+}
+```
+
+### String Manipulation
+
+```java
+String text = "  Hello, World!  ";
+
+// Basic operations
+String trimmed = text.trim();           // "Hello, World!"
+String upper = trimmed.toUpperCase();   // "HELLO, WORLD!"
+String replaced = upper.replace("WORLD", "JAVA");
+
+// Searching
+boolean contains = text.contains("World");  // true
+int index = text.indexOf("World");          // 9
+
+// Splitting
+String csv = "apple,banana,cherry";
+String[] fruits = csv.split(",");
+
+// Building strings efficiently
+StringBuilder builder = new StringBuilder();
+for (int i = 0; i < 1000; i++) {
+    builder.append(i).append(",");
+}
+String numbers = builder.toString();
+```
+
+<Note>
+  The java.lang package is automatically imported. You never need to write `import java.lang.*`.
+</Note>

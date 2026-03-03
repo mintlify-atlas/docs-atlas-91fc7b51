@@ -1,0 +1,409 @@
+---
+title: jlink - Java Linker
+description: Create custom Java runtime images with jlink by assembling and optimizing modules and dependencies
+---
+
+The `jlink` tool assembles and optimizes a set of modules and their dependencies into a custom runtime image. It is part of the `jdk.jlink` module.
+
+## Basic Usage
+
+```bash
+jlink [options] --module-path modulepath --add-modules module[,module...] --output path
+```
+
+## Source Code
+
+The jlink implementation is located at:
+- **Main task**: `src/jdk.jlink/share/classes/jdk/tools/jlink/internal/JlinkTask.java:1`
+- **Task helper**: `src/jdk.jlink/share/classes/jdk/tools/jlink/internal/TaskHelper.java:1`
+- **Image builder**: `src/jdk.jlink/share/classes/jdk/tools/jlink/builder/DefaultImageBuilder.java:1`
+
+## Required Options
+
+<ParamField path="--module-path" type="path" required>
+  Path where the jlink tool discovers observable modules. Can also use `-p`.
+  
+  The path can be a directory containing module files or a module file itself. Multiple paths are separated by the platform-specific path separator (`:` on Linux/macOS, `;` on Windows).
+  
+  ```bash
+  jlink --module-path $JAVA_HOME/jmods:mods \
+        --add-modules com.example.app \
+        --output myapp-runtime
+  ```
+</ParamField>
+
+<ParamField path="--add-modules" type="module-list" required>
+  Root modules to resolve in addition to the initial module. The modules must be found in the module path.
+  
+  ```bash
+  jlink --module-path $JAVA_HOME/jmods \
+        --add-modules java.base,java.logging,java.sql \
+        --output custom-jre
+  ```
+</ParamField>
+
+<ParamField path="--output" type="path" required>
+  Location of the generated runtime image. The directory must not already exist.
+  
+  ```bash
+  jlink --module-path mods \
+        --add-modules myapp \
+        --output dist/myapp-image
+  ```
+</ParamField>
+
+## Module Selection Options
+
+<ParamField path="--limit-modules" type="module-list">
+  Limit the universe of observable modules to those in the comma-separated list, plus the main module (if any), plus any further modules that these modules depend upon.
+  
+  ```bash
+  jlink --module-path $JAVA_HOME/jmods \
+        --limit-modules java.base,java.logging \
+        --add-modules java.logging \
+        --output minimal-jre
+  ```
+</ParamField>
+
+<ParamField path="--suggest-providers" type="module-name">
+  Suggest providers that implement the given service type from the module path.
+  
+  ```bash
+  jlink --module-path $JAVA_HOME/jmods \
+        --suggest-providers java.nio.file.spi.FileSystemProvider
+  ```
+</ParamField>
+
+<ParamField path="--bind-services" type="none">
+  Link service provider modules and their dependencies.
+  
+  ```bash
+  jlink --module-path $JAVA_HOME/jmods \
+        --add-modules java.base \
+        --bind-services \
+        --output jre-with-services
+  ```
+</ParamField>
+
+## Image Configuration
+
+<ParamField path="--launcher" type="name=module[/mainclass]">
+  Add a launcher command of the given name for the module, and optionally the main class.
+  
+  ```bash
+  jlink --module-path mods \
+        --add-modules com.example.app \
+        --launcher myapp=com.example.app/com.example.app.Main \
+        --output myapp-runtime
+  
+  # Run with generated launcher
+  ./myapp-runtime/bin/myapp
+  ```
+</ParamField>
+
+<ParamField path="--endian" type="little|big">
+  Byte order of the generated image (default: native).
+  
+  ```bash
+  jlink --module-path $JAVA_HOME/jmods \
+        --add-modules java.base \
+        --endian little \
+        --output custom-jre
+  ```
+</ParamField>
+
+<ParamField path="--ignore-signing-information" type="none">
+  Suppress a fatal error when signed modular JARs are linked in the image. The signature-related files of the signed modular JARs are not copied to the runtime image.
+  
+  ```bash
+  jlink --module-path signed-mods \
+        --add-modules com.example.signed \
+        --ignore-signing-information \
+        --output myapp
+  ```
+</ParamField>
+
+## Output Control
+
+<ParamField path="--verbose" type="none">
+  Enable verbose tracing. Can also use `-v`.
+  
+  ```bash
+  jlink -v --module-path mods \
+        --add-modules myapp \
+        --output dist/myapp
+  ```
+</ParamField>
+
+<ParamField path="--save-opts" type="filename">
+  Save jlink options in the specified file.
+  
+  ```bash
+  jlink --module-path mods \
+        --add-modules myapp \
+        --output myapp-runtime \
+        --save-opts jlink.opts
+  ```
+</ParamField>
+
+## Plugin Options
+
+jlink includes a plugin system for customizing the generated image. Use `--list-plugins` to see available plugins.
+
+<Tabs>
+  <Tab title="Compression">
+    ### compress
+    
+    Compress resources in the output image.
+    
+    **Level 0**: No compression
+    **Level 1**: Constant string sharing
+    **Level 2**: ZIP compression
+    
+    ```bash
+    jlink --module-path $JAVA_HOME/jmods \
+          --add-modules java.base \
+          --compress 2 \
+          --output compressed-jre
+    ```
+  </Tab>
+  
+  <Tab title="Strip Debug">
+    ### strip-debug
+    
+    Strip debug information from the output image.
+    
+    ```bash
+    jlink --module-path mods \
+          --add-modules myapp \
+          --strip-debug \
+          --output myapp-prod
+    ```
+  </Tab>
+  
+  <Tab title="VM">
+    ### vm
+    
+    Select the HotSpot VM in the output image.
+    
+    Options: `client`, `server`, `minimal`, `all`
+    
+    ```bash
+    jlink --module-path $JAVA_HOME/jmods \
+          --add-modules java.base \
+          --vm server \
+          --output server-jre
+    ```
+  </Tab>
+  
+  <Tab title="Include Locales">
+    ### include-locales
+    
+    Include specific locale data.
+    
+    ```bash
+    jlink --module-path $JAVA_HOME/jmods \
+          --add-modules java.base,jdk.localedata \
+          --include-locales en,ja,zh \
+          --output localized-jre
+    ```
+  </Tab>
+  
+  <Tab title="Order Resources">
+    ### order-resources
+    
+    Order resources in the output image.
+    
+    ```bash
+    jlink --module-path mods \
+          --add-modules myapp \
+          --order-resources=@resource-order.txt \
+          --output optimized-app
+    ```
+  </Tab>
+</Tabs>
+
+## Common Usage Examples
+
+### Create Minimal Java Runtime
+
+```bash
+# Create runtime with only java.base module
+jlink --module-path $JAVA_HOME/jmods \
+      --add-modules java.base \
+      --output minimal-jre
+
+# Check size
+du -sh minimal-jre
+```
+
+### Create Application Runtime
+
+```bash
+# First, compile your modular application
+javac -d mods/com.example.app \
+      --module-source-path src \
+      $(find src -name '*.java')
+
+# Create runtime with your app and dependencies
+jlink --module-path $JAVA_HOME/jmods:mods \
+      --add-modules com.example.app \
+      --launcher myapp=com.example.app/com.example.app.Main \
+      --output myapp-runtime
+
+# Run your application
+./myapp-runtime/bin/myapp
+```
+
+### Create Optimized Production Runtime
+
+```bash
+jlink --module-path $JAVA_HOME/jmods:mods \
+      --add-modules com.example.app \
+      --strip-debug \
+      --compress 2 \
+      --no-header-files \
+      --no-man-pages \
+      --launcher myapp=com.example.app/com.example.app.Main \
+      --output myapp-prod
+```
+
+### Create Cross-Platform Runtime
+
+```bash
+# Create Linux runtime from any platform
+jlink --module-path linux-jmods:mods \
+      --add-modules com.example.app \
+      --launcher myapp=com.example.app \
+      --output myapp-linux
+```
+
+### Include Service Providers
+
+```bash
+jlink --module-path $JAVA_HOME/jmods:mods \
+      --add-modules com.example.app \
+      --bind-services \
+      --output myapp-with-services
+```
+
+## Advanced Options
+
+<ParamField path="--keep-packaged-modules" type="directory">
+  Preserve packaged modules in the specified directory in the output image.
+  
+  ```bash
+  jlink --module-path mods \
+        --add-modules myapp \
+        --keep-packaged-modules jmods \
+        --output myapp-runtime
+  ```
+</ParamField>
+
+<ParamField path="--plugin-module-path" type="path">
+  Custom plugin module path.
+  
+  ```bash
+  jlink --plugin-module-path custom-plugins \
+        --module-path mods \
+        --add-modules myapp \
+        --output myapp-runtime
+  ```
+</ParamField>
+
+## Information Options
+
+<ParamField path="--help" type="none">
+  Print help message. Can also use `-h` or `-?`.
+  
+  ```bash
+  jlink --help
+  ```
+</ParamField>
+
+<ParamField path="--version" type="none">
+  Print version information.
+  
+  ```bash
+  jlink --version
+  ```
+</ParamField>
+
+<ParamField path="--list-plugins" type="none">
+  List available plugins.
+  
+  ```bash
+  jlink --list-plugins
+  ```
+</ParamField>
+
+## Runtime Image Structure
+
+The generated runtime image has the following structure:
+
+```
+myapp-runtime/
+├── bin/              # Launcher scripts and executables
+│   ├── java          # Java launcher
+│   └── myapp         # Custom launcher (if --launcher used)
+├── conf/             # Configuration files
+│   ├── logging.properties
+│   ├── net.properties
+│   └── security/
+├── legal/            # Legal notices
+├── lib/              # Runtime libraries
+│   ├── modules       # Optimized module image
+│   ├── server/       # Server VM (if included)
+│   └── *.so/*.dll    # Native libraries
+└── release           # Release information
+```
+
+<Info>
+The `modules` file in the `lib/` directory is a custom format optimized for fast module lookup and loading. It contains all the modules specified with `--add-modules` and their dependencies.
+</Info>
+
+<Note>
+When using `--launcher`, jlink creates a native launcher that directly starts your application without requiring `java -m modulename/mainclass`. This provides a better user experience for standalone applications.
+</Note>
+
+## Plugin Development
+
+Custom plugins can be created by implementing the `jdk.tools.jlink.plugin.Plugin` interface:
+
+```java
+package com.example.jlink;
+
+import jdk.tools.jlink.plugin.Plugin;
+import jdk.tools.jlink.plugin.ResourcePool;
+import jdk.tools.jlink.plugin.ResourcePoolBuilder;
+
+public class CustomPlugin implements Plugin {
+    @Override
+    public String getName() {
+        return "custom-plugin";
+    }
+    
+    @Override
+    public ResourcePool transform(ResourcePool in, ResourcePoolBuilder out) {
+        // Transform resources
+        in.entries().forEach(resource -> {
+            // Process resource
+            out.add(resource);
+        });
+        return out.build();
+    }
+}
+```
+
+## Exit Codes
+
+- `0`: Successful operation
+- `1`: Errors occurred
+- `2`: Invalid command-line arguments
+- `3`: System error or resource exhaustion
+
+## See Also
+
+- [javac](/tools/javac) - Java compiler
+- [jmod](https://docs.oracle.com/en/java/javase/21/docs/specs/man/jmod.html) - JMOD file tool
+- [jpackage](/tools/jpackage) - Package tool

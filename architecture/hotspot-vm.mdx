@@ -1,0 +1,259 @@
+---
+title: "HotSpot Virtual Machine"
+description: "Deep dive into the HotSpot VM architecture, runtime system, and execution model"
+---
+
+The HotSpot Virtual Machine is Oracle's high-performance JVM implementation, named for its ability to identify and optimize "hot spots" in code through adaptive compilation.
+
+## VM Initialization
+
+The HotSpot VM initialization sequence (`src/hotspot/share/runtime/`) follows a carefully orchestrated startup process:
+
+1. **Parse VM Arguments** - Process command-line flags and options
+2. **Initialize Thread System** - Set up thread-local storage and management
+3. **Initialize Memory** - Create heap and configure garbage collector
+4. **Load System Classes** - Bootstrap `java.base` module and core classes
+5. **Initialize Interpreter** - Generate interpreter code or initialize C++ interpreter
+6. **Initialize Compilers** - Start C1/C2 compiler threads if enabled
+7. **Start VM Threads** - Launch GC, service, and monitoring threads
+8. **Invoke Main** - Execute the application's main method
+
+<Note>
+The VM uses lazy initialization where possible - many subsystems are only fully initialized when first needed to reduce startup time.
+</Note>
+
+## Runtime Data Areas
+
+The HotSpot VM maintains several runtime data areas as specified by the JVM specification:
+
+### Per-Thread Areas
+
+<Tabs>
+  <Tab title="Java Stack">
+    Each JavaThread has its own stack containing:
+    - **Frames** - Method invocation records
+    - **Local Variables** - Method parameters and local variables
+    - **Operand Stack** - Temporary values for computation
+    - **Frame Data** - Return addresses and exception handling
+
+    Stack frames are created on method entry and destroyed on method exit.
+  </Tab>
+  <Tab title="Program Counter">
+    Each thread maintains a program counter (PC) register:
+    - Points to the current bytecode instruction
+    - For native methods, the value is undefined
+    - Updated after each instruction execution
+    - Used for resumption after thread switches
+  </Tab>
+  <Tab title="Native Stack">
+    Separate stack for native method execution:
+    - Used by JNI calls
+    - Platform-specific implementation
+    - Managed by OS, not VM
+  </Tab>
+</Tabs>
+
+### Shared Areas
+
+#### Heap
+The largest memory area, shared among all threads. Managed by the garbage collector. See [Garbage Collection](/architecture/garbage-collection) for details.
+
+#### Metaspace
+Replaced the permanent generation in Java 8+. Located in `src/hotspot/share/memory/metaspace/`:
+
+```cpp
+// Metaspace stores:
+- Class metadata (InstanceKlass, Method, ConstantPool)
+- Method bytecode
+- Symbols and constant pool entries
+- Annotations and type information
+```
+
+Metaspace grows dynamically in native memory and can be constrained with `-XX:MaxMetaspaceSize`.
+
+#### Code Cache
+Stores compiled native code from the JIT compilers:
+- **Non-method code** - VM stubs and runtime routines
+- **Profiled code** - C1-compiled methods with profiling
+- **Non-profiled code** - C2-optimized methods
+
+## Execution Model
+
+HotSpot uses a mixed-mode execution strategy combining interpretation and compilation:
+
+### Interpretation Phase
+
+All methods initially execute in the interpreter (`src/hotspot/share/interpreter/`):
+
+<Info>
+The Template Interpreter generates optimized assembly code for each bytecode at VM startup. This provides much better performance than pure C++ interpretation while maintaining portability through platform-specific template tables.
+</Info>
+
+**Method Kinds** - The interpreter recognizes special method types for optimized entry points:
+
+- `zerolocals` - Standard methods requiring local variable initialization
+- `native` / `native_synchronized` - JNI method entry points
+- `empty` - Methods containing only a return statement
+- `getter` / `setter` - Simple field access methods
+- `method_handle_invoke_*` - MethodHandle invocation variants
+- Intrinsic methods - Math operations, CRC32, Reference.get(), etc.
+
+### Compilation Triggers
+
+Methods transition from interpretation to compilation based on:
+
+1. **Invocation Count** - Number of times method is called
+2. **Back-edge Count** - Number of loop iterations
+3. **Compilation Threshold** - Configurable trigger points
+
+The invocation counter is tracked per-method in `src/hotspot/share/interpreter/invocationCounter.hpp`.
+
+### Tiered Compilation
+
+Modern HotSpot uses tiered compilation with 5 levels:
+
+| Level | Compiler | Profiling | Optimization | Purpose |
+|-------|----------|-----------|--------------|----------|
+| 0 | Interpreter | Yes | None | Initial execution |
+| 1 | C1 | No | None | Simple compilation |
+| 2 | C1 | Yes | Limited | Profiling |
+| 3 | C1 | Yes | Full | Profiled compilation |
+| 4 | C2 | No | Aggressive | Peak performance |
+
+<Note>
+Tiered compilation balances startup time (fast C1 compilation) with peak performance (optimized C2 compilation). Methods can move between levels based on runtime behavior.
+</Note>
+
+## Class Loading System
+
+Class loading is managed by several interconnected subsystems:
+
+### ClassLoaderData
+
+Each class loader has an associated `ClassLoaderData` instance that tracks:
+- Loaded classes
+- Metaspace allocations
+- Module relationships
+- Dependencies for unloading
+
+### System Dictionary
+
+The system dictionary (`src/hotspot/share/classfile/systemDictionary.hpp`) provides:
+- Class lookup by name and class loader
+- Well-known class caching (String, Class, Object, etc.)
+- Protection domain management
+- Resolution and linking coordination
+
+### Verification
+
+The bytecode verifier ensures class files conform to JVM specification:
+- Type safety verification
+- Stack depth analysis
+- Control flow validation
+- Access permission checking
+
+## Synchronization Primitives
+
+HotSpot implements Java synchronization using platform-specific primitives:
+
+### Monitor Implementation
+
+Object monitors (`src/hotspot/share/runtime/objectMonitor.hpp`) use:
+- **Biased Locking** - Fast-path for uncontended locks (deprecated in recent versions)
+- **Thin Locks** - CAS-based locking in object header
+- **Inflated Monitors** - Full monitor objects for contended locks
+
+### Wait/Notify
+
+Condition variables are implemented using:
+- Platform thread primitives (pthread_cond, Windows events)
+- Wait queues managed per monitor
+- Spurious wake-up handling
+
+## Safepoints
+
+Safepoints are points where all threads reach a known state, required for:
+- Garbage collection
+- Deoptimization
+- Biased lock revocation
+- Thread stack dumps
+- Class redefinition
+
+Threads reach safepoints through:
+1. **Polling** - Explicit safepoint checks in compiled code
+2. **Handshakes** - Direct thread suspension (Linux)
+3. **Signals** - OS signal delivery to threads
+
+## Object Representation
+
+Every Java object in memory has a specific layout:
+
+```
++------------------+
+| Object Header    |
+|  - Mark Word     |  (hashcode, age, lock state, GC flags)
+|  - Klass Pointer |  (compressed class pointer)
++------------------+
+| Instance Fields  |  (sorted by size: longs/doubles first)
++------------------+
+| Alignment Padding|  (to 8-byte boundary)
++------------------+
+```
+
+### Compressed Pointers
+
+With `-XX:+UseCompressedOops` (default up to 32GB heap):
+- Object references stored as 32-bit offsets
+- Base address + (offset &lt;&lt; 3) = actual address
+- Reduces memory footprint by ~40%
+- Implemented in `src/hotspot/share/oops/compressedKlass.hpp`
+
+## JNI and Native Interface
+
+The Java Native Interface (`src/hotspot/share/prims/`) provides:
+
+### JNI Method Dispatch
+- Native method registration and lookup
+- Argument marshaling between Java and native
+- Local and global reference management
+- Exception handling across JNI boundary
+
+### Critical Natives
+Optimized native call path for:
+- Methods with primitive arguments/returns only
+- No safepoint checks during call
+- Direct pointer access to primitive arrays
+- Significantly faster than regular JNI
+
+## JVMTI Support
+
+The JVM Tool Interface (`src/hotspot/share/prims/jvmti`) enables:
+- Debugging agents (jdwp)
+- Profiling tools
+- Class file transformation
+- Heap walking and inspection
+- Method entry/exit events
+- Breakpoint and watchpoint support
+
+## Performance Monitoring
+
+HotSpot provides extensive performance counters (`src/hotspot/share/runtime/perfData.hpp`):
+
+- Method compilation statistics
+- GC timing and throughput
+- Thread CPU time
+- Memory allocation rates
+- Safepoint statistics
+
+Accessible via JMX and `jcmd` tools.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Garbage Collection" href="/architecture/garbage-collection">
+    Explore GC implementations
+  </Card>
+  <Card title="JIT Compiler" href="/architecture/jit-compiler">
+    Learn about C1, C2, and Graal
+  </Card>
+</CardGroup>

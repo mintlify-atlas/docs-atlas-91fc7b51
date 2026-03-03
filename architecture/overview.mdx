@@ -1,0 +1,186 @@
+---
+title: "Architecture Overview"
+description: "High-level architecture of the OpenJDK platform and HotSpot VM"
+---
+
+OpenJDK is a complex, multi-layered platform that provides a complete Java runtime environment. At its core is the HotSpot Virtual Machine, which handles bytecode execution, memory management, and runtime optimization.
+
+## Core Components
+
+The OpenJDK architecture consists of several key subsystems that work together to execute Java applications:
+
+<CardGroup cols={2}>
+  <Card title="Runtime System" icon="gears">
+    Thread management, class loading, and execution control
+  </Card>
+  <Card title="Memory Management" icon="database">
+    Heap allocation, garbage collection, and metaspace
+  </Card>
+  <Card title="Execution Engine" icon="bolt">
+    Interpreter and JIT compilation system
+  </Card>
+  <Card title="Module System" icon="boxes">
+    JPMS implementation and module resolution
+  </Card>
+</CardGroup>
+
+## Thread Hierarchy
+
+The HotSpot VM implements a sophisticated thread hierarchy defined in `src/hotspot/share/runtime/thread.hpp`:
+
+```
+Thread (base class)
+├── JavaThread
+│   ├── CompilerThread
+│   └── ServiceThread
+└── NonJavaThread
+    ├── NamedThread
+    │   ├── VMThread
+    │   ├── ConcurrentGCThread
+    │   └── WorkerThread
+    ├── WatcherThread
+    ├── JfrThreadSampler
+    ├── JfrCPUSamplerThread
+    └── LogAsyncWriter
+```
+
+<Info>
+All Thread subclasses must be either JavaThread or NonJavaThread. This binary classification simplifies thread identification and management throughout the VM.
+</Info>
+
+## Thread Execution Sequence
+
+Each thread follows a standardized execution sequence:
+
+1. **Native Entry** - Platform-specific entry point (`thread_native_entry`)
+2. **Stack Initialization** - Stack setup and OS-level initialization
+3. **Handshake** - Synchronization with creating thread
+4. **Common Entry** - Shared entry point (`call_run()`)
+5. **Pre-run** - Virtual per-thread-type initialization
+6. **Run** - Main thread logic (virtual method)
+7. **Post-run** - Virtual per-thread-type tear-down
+8. **OS Tear-down** - Minimal cleanup and final logging
+
+## Heap Architecture
+
+OpenJDK supports multiple garbage collector implementations, all inheriting from the `CollectedHeap` base class defined in `src/hotspot/share/gc/shared/collectedHeap.hpp`:
+
+<Tabs>
+  <Tab title="Heap Hierarchy">
+    ```
+    CollectedHeap (abstract base)
+    ├── SerialHeap
+    ├── G1CollectedHeap
+    ├── ParallelScavengeHeap
+    ├── ShenandoahHeap
+    └── ZCollectedHeap
+    ```
+  </Tab>
+  <Tab title="Key Operations">
+    All heap implementations provide:
+    - Memory allocation (TLAB and direct)
+    - Collection triggering
+    - Object iteration
+    - Memory usage reporting
+    - Barrier set management
+  </Tab>
+</Tabs>
+
+## Class Loading and Metadata
+
+The classfile subsystem (`src/hotspot/share/classfile/`) handles:
+
+- **Class Loading** - Parsing and verification of class files
+- **Module System** - JPMS implementation via `ModuleEntry` and related classes
+- **System Dictionary** - Class lookup and resolution
+- **Class Linking** - Symbol resolution and verification
+
+### Object Representation
+
+Classes are represented internally using the Klass hierarchy (`src/hotspot/share/oops/`):
+
+- `Klass` - Base metadata class
+- `InstanceKlass` - Represents Java classes
+- `ArrayKlass` - Base for array types
+  - `TypeArrayKlass` - Primitive arrays
+  - `ObjArrayKlass` - Object arrays
+- Specialized variants: `InstanceMirrorKlass`, `InstanceRefKlass`, `InstanceStackChunkKlass`
+
+<Note>
+The "oops" directory name stands for "ordinary object pointers" and contains the fundamental object and metadata representations used throughout HotSpot.
+</Note>
+
+## Interpreter System
+
+HotSpot includes two interpreter implementations (`src/hotspot/share/interpreter/`):
+
+### Template Interpreter
+The primary interpreter that generates platform-specific assembly code at VM startup. Key components:
+- `templateTable` - Bytecode interpretation logic
+- `templateInterpreter` - Runtime frame management
+- `bytecodes` - Bytecode definitions and utilities
+
+### Zero Interpreter
+A portable C++ fallback interpreter for platforms without template interpreter support:
+- `bytecodeInterpreter` - C++ bytecode interpretation
+- `zeroInterpreter` - Frame management
+
+## Compiler Integration
+
+The VM integrates multiple compilation tiers through the `AbstractCompiler` interface:
+
+- **C1 Compiler** - Client compiler for fast compilation
+- **C2 Compiler** - Server compiler for peak performance
+- **JVMCI** - JVM Compiler Interface for Graal and other compilers
+
+Compilation is managed by `CompilerThread` instances that process methods from a compilation queue.
+
+## Memory Regions
+
+The VM manages several distinct memory regions:
+
+| Region | Purpose | Location |
+|--------|---------|----------|
+| **Heap** | Java objects | Managed by GC |
+| **Metaspace** | Class metadata | Native memory |
+| **Code Cache** | JIT compiled code | Native memory |
+| **Thread Stacks** | Execution frames | Per-thread native memory |
+| **Native Memory** | VM internals | OS allocation |
+
+## Services and Monitoring
+
+The `src/hotspot/share/services/` subsystem provides:
+
+- **JMX Integration** - Management beans and monitoring
+- **Memory Pools** - Per-region memory tracking
+- **GC Managers** - Garbage collection monitoring
+- **Thread Monitoring** - CPU time and contention tracking
+
+## Platform Abstraction
+
+Platform-specific code is isolated in OS-specific directories:
+
+- `src/hotspot/os/linux/` - Linux implementation
+- `src/hotspot/os/windows/` - Windows implementation
+- `src/hotspot/os/bsd/` - BSD variants
+- `src/hotspot/cpu/x86/` - x86/x64 architecture
+- `src/hotspot/cpu/aarch64/` - ARM 64-bit
+
+The `os` subsystem provides abstractions for threading, memory management, and synchronization primitives.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="HotSpot VM" href="/architecture/hotspot-vm">
+    Deep dive into HotSpot internals
+  </Card>
+  <Card title="Garbage Collection" href="/architecture/garbage-collection">
+    GC algorithms and implementations
+  </Card>
+  <Card title="JIT Compilation" href="/architecture/jit-compiler">
+    C1, C2, and Graal compilers
+  </Card>
+  <Card title="Module System" href="/architecture/module-system">
+    JPMS architecture and implementation
+  </Card>
+</CardGroup>

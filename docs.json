@@ -1,122 +1,122 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "OpenJDK",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#F89820",
+    "light": "#FFA940",
+    "dark": "#E68200"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/openjdk/jdk"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/openjdk/jdk"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Building the JDK",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "building/overview",
+              "building/requirements",
+              "building/configuration",
+              "building/compilation",
+              "building/troubleshooting"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Architecture",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "architecture/overview",
+              "architecture/hotspot-vm",
+              "architecture/garbage-collection",
+              "architecture/jit-compiler",
+              "architecture/module-system"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Development",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "development/contributing",
+              "development/code-style",
+              "development/testing",
+              "development/debugging"
+            ]
+          },
+          {
+            "group": "Tools & Utilities",
+            "pages": [
+              "tools/overview",
+              "tools/javac",
+              "tools/jlink",
+              "tools/jpackage",
+              "tools/jcmd"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Core APIs",
             "pages": [
-              "api-reference/introduction"
+              "api/java-base",
+              "api/java-lang",
+              "api/java-util",
+              "api/java-io"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Desktop APIs",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/java-desktop",
+              "api/awt",
+              "api/swing"
+            ]
+          },
+          {
+            "group": "Network & Communication",
+            "pages": [
+              "api/java-net",
+              "api/java-nio",
+              "api/java-rmi"
+            ]
+          },
+          {
+            "group": "Security & Crypto",
+            "pages": [
+              "api/java-security",
+              "api/java-crypto",
+              "api/jgss"
+            ]
+          },
+          {
+            "group": "JVM Internals",
+            "pages": [
+              "api/hotspot-overview",
+              "api/jvmti",
+              "api/jni"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

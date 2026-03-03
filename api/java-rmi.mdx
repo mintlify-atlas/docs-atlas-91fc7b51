@@ -1,0 +1,537 @@
+---
+title: java.rmi
+description: Remote Method Invocation (RMI) for distributed Java applications
+---
+
+The `java.rmi` package provides the Remote Method Invocation (RMI) framework, enabling Java applications to invoke methods on objects located in different Java Virtual Machines, whether on the same machine or across a network.
+
+## Overview
+
+RMI allows an object running in one JVM to invoke methods on an object running in another JVM. It provides:
+
+- Transparent remote method calls
+- Automatic parameter marshaling/unmarshaling
+- Distributed garbage collection
+- Remote object registry service
+- Support for callbacks and bi-directional communication
+
+## Core Interfaces
+
+### Remote
+
+The `Remote` interface is a marker interface that identifies interfaces whose methods may be invoked from a non-local virtual machine.
+
+```java
+public interface Remote {}
+```
+
+Any object that is a remote object must directly or indirectly implement this interface. Only methods specified in a remote interface are available remotely.
+
+<Tabs>
+  <Tab title="Define Remote Interface">
+    ```java
+    import java.rmi.Remote;
+    import java.rmi.RemoteException;
+    
+    // All remote interfaces must extend Remote
+    public interface Calculator extends Remote {
+        // All methods must declare RemoteException
+        int add(int a, int b) throws RemoteException;
+        int subtract(int a, int b) throws RemoteException;
+        int multiply(int a, int b) throws RemoteException;
+        double divide(int a, int b) throws RemoteException;
+    }
+    ```
+  </Tab>
+  <Tab title="Implement Remote Object">
+    ```java
+    import java.rmi.RemoteException;
+    import java.rmi.server.UnicastRemoteObject;
+    
+    // Extend UnicastRemoteObject for automatic stub generation
+    public class CalculatorImpl extends UnicastRemoteObject 
+            implements Calculator {
+        
+        // Constructor must declare RemoteException
+        public CalculatorImpl() throws RemoteException {
+            super();
+        }
+        
+        @Override
+        public int add(int a, int b) throws RemoteException {
+            return a + b;
+        }
+        
+        @Override
+        public int subtract(int a, int b) throws RemoteException {
+            return a - b;
+        }
+        
+        @Override
+        public int multiply(int a, int b) throws RemoteException {
+            return a * b;
+        }
+        
+        @Override
+        public double divide(int a, int b) throws RemoteException {
+            if (b == 0) {
+                throw new RemoteException("Division by zero");
+            }
+            return (double) a / b;
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Registry
+
+The `Registry` interface provides a remote object registry for storing and retrieving remote object references.
+
+```java
+public interface Registry extends Remote
+```
+
+The registry enables RMI client bootstrapping by providing a simple means to obtain initial references to remote objects.
+
+<ResponseField name="Registry Methods" type="operations">
+  - **lookup(String name)** - Returns the remote reference bound to the specified name
+  - **bind(String name, Remote obj)** - Binds a remote reference to the specified name
+  - **rebind(String name, Remote obj)** - Replaces the binding for the specified name
+  - **unbind(String name)** - Removes the binding for the specified name
+  - **list()** - Returns an array of the names bound in this registry
+</ResponseField>
+
+<Tabs>
+  <Tab title="Server Setup">
+    ```java
+    import java.rmi.registry.Registry;
+    import java.rmi.registry.LocateRegistry;
+    
+    public class CalculatorServer {
+        public static void main(String[] args) {
+            try {
+                // Create the remote object
+                CalculatorImpl calculator = new CalculatorImpl();
+                
+                // Create registry on port 1099 (default RMI port)
+                Registry registry = LocateRegistry.createRegistry(1099);
+                
+                // Bind the remote object in the registry
+                registry.rebind("Calculator", calculator);
+                
+                System.out.println("Calculator Server is ready.");
+                
+            } catch (Exception e) {
+                System.err.println("Server exception: " + e.toString());
+                e.printStackTrace();
+            }
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="Client Lookup">
+    ```java
+    import java.rmi.registry.Registry;
+    import java.rmi.registry.LocateRegistry;
+    
+    public class CalculatorClient {
+        public static void main(String[] args) {
+            try {
+                // Get reference to remote registry
+                Registry registry = LocateRegistry.getRegistry("localhost", 1099);
+                
+                // Look up remote object
+                Calculator calculator = (Calculator) registry.lookup("Calculator");
+                
+                // Invoke remote methods
+                int sum = calculator.add(5, 3);
+                System.out.println("5 + 3 = " + sum);
+                
+                int diff = calculator.subtract(10, 4);
+                System.out.println("10 - 4 = " + diff);
+                
+                int product = calculator.multiply(6, 7);
+                System.out.println("6 * 7 = " + product);
+                
+                double quotient = calculator.divide(15, 3);
+                System.out.println("15 / 3 = " + quotient);
+                
+            } catch (Exception e) {
+                System.err.println("Client exception: " + e.toString());
+                e.printStackTrace();
+            }
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### LocateRegistry
+
+The `LocateRegistry` class provides methods for obtaining references to remote registries and creating new registries.
+
+```java
+public final class LocateRegistry
+```
+
+<Tabs>
+  <Tab title="Get Registry">
+    ```java
+    // Get registry on localhost, default port (1099)
+    Registry registry = LocateRegistry.getRegistry();
+    
+    // Get registry on localhost, specific port
+    Registry registry2 = LocateRegistry.getRegistry(2099);
+    
+    // Get registry on remote host
+    Registry registry3 = LocateRegistry.getRegistry("remote.example.com");
+    
+    // Get registry on remote host, specific port
+    Registry registry4 = LocateRegistry.getRegistry("remote.example.com", 2099);
+    ```
+  </Tab>
+  <Tab title="Create Registry">
+    ```java
+    // Create registry on default port (1099)
+    Registry registry = LocateRegistry.createRegistry(1099);
+    
+    // Create registry on custom port
+    Registry customRegistry = LocateRegistry.createRegistry(2099);
+    
+    // Create registry with custom socket factories
+    RMIClientSocketFactory csf = ...; // custom client socket factory
+    RMIServerSocketFactory ssf = ...; // custom server socket factory
+    Registry secureRegistry = LocateRegistry.createRegistry(
+        1099, csf, ssf
+    );
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  The default RMI registry port is **1099**. The `getRegistry()` method does not actually make a connection to the remote host; it simply creates a local reference. The connection is established when you invoke a method on the registry.
+</Note>
+
+## Naming
+
+The `Naming` class provides methods for storing and obtaining references to remote objects using URL-based naming.
+
+```java
+public final class Naming
+```
+
+The URL format is: `//host:port/name`
+
+<Tabs>
+  <Tab title="Using Naming Class">
+    ```java
+    import java.rmi.Naming;
+    
+    // Server side - bind remote object
+    public class NamingServer {
+        public static void main(String[] args) {
+            try {
+                Calculator calculator = new CalculatorImpl();
+                
+                // Bind using URL notation
+                Naming.rebind("//localhost:1099/Calculator", calculator);
+                
+                // Or use shorter form (assumes localhost and port 1099)
+                Naming.rebind("Calculator", calculator);
+                
+                System.out.println("Server ready");
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    
+    // Client side - lookup remote object
+    public class NamingClient {
+        public static void main(String[] args) {
+            try {
+                // Lookup using URL notation
+                Calculator calc = (Calculator) Naming.lookup(
+                    "//localhost:1099/Calculator"
+                );
+                
+                int result = calc.add(10, 20);
+                System.out.println("Result: " + result);
+                
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="List Registered Objects">
+    ```java
+    import java.rmi.Naming;
+    
+    // List all registered objects
+    String[] names = Naming.list("//localhost:1099");
+    
+    System.out.println("Registered objects:");
+    for (String name : names) {
+        System.out.println("  " + name);
+    }
+    
+    // Unbind an object
+    Naming.unbind("//localhost:1099/Calculator");
+    ```
+  </Tab>
+</Tabs>
+
+## UnicastRemoteObject
+
+The `UnicastRemoteObject` class provides the basic functionality for exporting remote objects using JRMP (Java Remote Method Protocol).
+
+```java
+public class UnicastRemoteObject extends RemoteServer
+```
+
+Subclassing `UnicastRemoteObject` is the simplest way to create a remote object. The class automatically exports the object during construction.
+
+<Tabs>
+  <Tab title="Extend UnicastRemoteObject">
+    ```java
+    import java.rmi.RemoteException;
+    import java.rmi.server.UnicastRemoteObject;
+    import java.util.List;
+    import java.util.ArrayList;
+    
+    public interface DataService extends Remote {
+        void addData(String data) throws RemoteException;
+        List<String> getAllData() throws RemoteException;
+        void clearData() throws RemoteException;
+    }
+    
+    public class DataServiceImpl extends UnicastRemoteObject 
+            implements DataService {
+        
+        private List<String> dataStore;
+        
+        public DataServiceImpl() throws RemoteException {
+            super();
+            this.dataStore = new ArrayList<>();
+        }
+        
+        // Export on specific port
+        public DataServiceImpl(int port) throws RemoteException {
+            super(port);
+            this.dataStore = new ArrayList<>();
+        }
+        
+        @Override
+        public void addData(String data) throws RemoteException {
+            dataStore.add(data);
+        }
+        
+        @Override
+        public List<String> getAllData() throws RemoteException {
+            return new ArrayList<>(dataStore);
+        }
+        
+        @Override
+        public void clearData() throws RemoteException {
+            dataStore.clear();
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="Manual Export">
+    ```java
+    import java.rmi.RemoteException;
+    import java.rmi.server.UnicastRemoteObject;
+    
+    // Without extending UnicastRemoteObject
+    public class ManualServiceImpl implements DataService {
+        private List<String> dataStore = new ArrayList<>();
+        
+        // No RemoteException in constructor
+        public ManualServiceImpl() {
+        }
+        
+        @Override
+        public void addData(String data) throws RemoteException {
+            dataStore.add(data);
+        }
+        
+        @Override
+        public List<String> getAllData() throws RemoteException {
+            return new ArrayList<>(dataStore);
+        }
+        
+        @Override
+        public void clearData() throws RemoteException {
+            dataStore.clear();
+        }
+    }
+    
+    // In server code:
+    ManualServiceImpl service = new ManualServiceImpl();
+    
+    // Manually export the object
+    DataService stub = (DataService) UnicastRemoteObject.exportObject(
+        service, 0  // 0 = anonymous port
+    );
+    
+    Registry registry = LocateRegistry.getRegistry();
+    registry.rebind("DataService", stub);
+    ```
+  </Tab>
+</Tabs>
+
+## Advanced Features
+
+### Custom Socket Factories
+
+RMI supports custom socket factories for implementing SSL, compression, or other custom transport mechanisms.
+
+```java
+import java.rmi.server.RMIClientSocketFactory;
+import java.rmi.server.RMIServerSocketFactory;
+import javax.net.ssl.*;
+import java.net.*;
+import java.io.IOException;
+
+// SSL Server Socket Factory
+public class SSLServerSocketFactory implements RMIServerSocketFactory {
+    public ServerSocket createServerSocket(int port) throws IOException {
+        SSLServerSocketFactory factory = 
+            (SSLServerSocketFactory) SSLServerSocketFactory.getDefault();
+        return factory.createServerSocket(port);
+    }
+}
+
+// SSL Client Socket Factory
+public class SSLClientSocketFactory implements RMIClientSocketFactory {
+    public Socket createSocket(String host, int port) throws IOException {
+        SSLSocketFactory factory = 
+            (SSLSocketFactory) SSLSocketFactory.getDefault();
+        return factory.createSocket(host, port);
+    }
+}
+
+// Use custom factories
+CalculatorImpl calculator = new CalculatorImpl(
+    0,  // port
+    new SSLClientSocketFactory(),
+    new SSLServerSocketFactory()
+);
+```
+
+### Callbacks
+
+RMI supports bi-directional communication through callbacks.
+
+```java
+// Callback interface
+public interface MessageListener extends Remote {
+    void onMessage(String message) throws RemoteException;
+}
+
+// Server interface with callback registration
+public interface ChatServer extends Remote {
+    void registerListener(MessageListener listener) throws RemoteException;
+    void sendMessage(String message) throws RemoteException;
+}
+
+// Client implements callback interface
+public class ChatClient extends UnicastRemoteObject 
+        implements MessageListener {
+    
+    public ChatClient() throws RemoteException {
+        super();
+    }
+    
+    @Override
+    public void onMessage(String message) throws RemoteException {
+        System.out.println("Received: " + message);
+    }
+    
+    public static void main(String[] args) throws Exception {
+        ChatClient client = new ChatClient();
+        
+        Registry registry = LocateRegistry.getRegistry("localhost");
+        ChatServer server = (ChatServer) registry.lookup("ChatServer");
+        
+        // Register callback
+        server.registerListener(client);
+    }
+}
+```
+
+### Parameter Passing
+
+RMI automatically handles parameter marshaling:
+
+- **Primitive types** - Passed by value (copied)
+- **Serializable objects** - Passed by value (serialized and copied)
+- **Remote objects** - Passed by reference (stub is passed)
+
+```java
+public interface DataProcessor extends Remote {
+    // Primitive - passed by value
+    int process(int value) throws RemoteException;
+    
+    // Serializable object - passed by value (copied)
+    Result processData(Data data) throws RemoteException;
+    
+    // Remote object - passed by reference (stub passed)
+    void registerCallback(Callback cb) throws RemoteException;
+}
+```
+
+## Exceptions
+
+RMI-specific exceptions:
+
+- **RemoteException** - Base class for RMI exceptions
+  - **ConnectException** - Cannot connect to remote host
+  - **UnknownHostException** - Cannot resolve hostname
+  - **MarshalException** - Error marshaling parameters or results
+  - **UnmarshalException** - Error unmarshaling parameters or results
+  - **ServerException** - Remote exception occurred on server
+  - **NoSuchObjectException** - Remote object no longer exists
+- **NotBoundException** - Name is not bound in registry
+- **AlreadyBoundException** - Name is already bound in registry
+- **AccessException** - Operation denied (security or local-only operation)
+
+```java
+try {
+    Registry registry = LocateRegistry.getRegistry("remote-host");
+    Calculator calc = (Calculator) registry.lookup("Calculator");
+    int result = calc.add(5, 3);
+} catch (NotBoundException e) {
+    System.err.println("Service not found: " + e.getMessage());
+} catch (ConnectException e) {
+    System.err.println("Cannot connect to server: " + e.getMessage());
+} catch (RemoteException e) {
+    System.err.println("RMI error: " + e.getMessage());
+}
+```
+
+<Note>
+  RMI uses dynamic stub generation by default (since Java 5). Static stubs generated by the `rmic` compiler are deprecated. The system automatically creates proxy-based stubs at runtime.
+</Note>
+
+## Security Considerations
+
+1. **Security Manager** - RMI applications may require a security manager
+2. **Code Downloading** - Be cautious with automatic code downloading
+3. **Registry Access** - Restrict registry modification to local host only
+4. **SSL/TLS** - Use custom socket factories for encrypted communication
+5. **Object Input Filters** - Use `ObjectInputFilter` to validate deserialized objects
+
+```java
+// Set object input filter for security
+UnicastRemoteObject.exportObject(obj, port, filter);
+```
+
+## See Also
+
+- [java.net](/api/java-net) - Networking APIs
+- [java.io.Serializable](/api/java-io-serializable) - Object serialization

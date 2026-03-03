@@ -1,0 +1,876 @@
+---
+title: "Swing GUI Framework API"
+description: "Lightweight, platform-independent GUI framework built on AWT providing rich components and advanced UI capabilities"
+---
+
+## Overview
+
+Swing is Java's primary GUI framework, providing a rich set of lightweight components for building modern desktop applications. Part of the `javax.swing` package, Swing offers:
+
+- Platform-independent look and feel
+- Rich, customizable components
+- Model-View-Controller (MVC) architecture
+- Advanced features like undo/redo, drag-and-drop
+- Pluggable Look and Feel (PLAF) system
+
+**Key Distinction from AWT:** Swing components are lightweight (pure Java) rather than heavyweight (native peer-based), offering more consistency across platforms and greater customization.
+
+## Core Components
+
+### Top-Level Containers
+
+<Tabs>
+  <Tab title="JFrame">
+    ### javax.swing.JFrame
+
+    Extended version of `java.awt.Frame` with Swing support. Main window class for Swing applications.
+
+    **From source (javax.swing.JFrame:48-49):**
+    > An extended version of java.awt.Frame that adds support for the JFC/Swing component architecture.
+
+    **Class Signature:**
+    ```java
+    public class JFrame extends Frame 
+        implements WindowConstants, Accessible, RootPaneContainer
+    ```
+
+    **Key Features:**
+
+    <ResponseField name="contentPane" type="Container">
+      The content pane where components are added (accessed via JRootPane)
+    </ResponseField>
+
+    <ResponseField name="defaultCloseOperation" type="int">
+      Behavior when window is closed (DO_NOTHING_ON_CLOSE, HIDE_ON_CLOSE, DISPOSE_ON_CLOSE, EXIT_ON_CLOSE)
+    </ResponseField>
+
+    <ResponseField name="JRootPane" type="root pane">
+      Contains layered pane, content pane, and optional menu bar
+    </ResponseField>
+
+    **Basic Usage:**
+    ```java
+    import javax.swing.*;
+    import java.awt.*;
+
+    public class JFrameExample {
+        public static void main(String[] args) {
+            SwingUtilities.invokeLater(() -> {
+                JFrame frame = new JFrame("My Application");
+                frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+                frame.setSize(400, 300);
+                
+                // Add components to content pane
+                frame.add(new JLabel("Hello Swing!"));
+                
+                frame.setVisible(true);
+            });
+        }
+    }
+    ```
+
+    **From source (javax.swing.JFrame:67-69):**
+    > For example, you can add a child component to a frame as follows:
+    > frame.add(child);
+    > And the child will be added to the contentPane.
+  </Tab>
+  
+  <Tab title="JDialog">
+    ### javax.swing.JDialog
+
+    Dialog window for displaying messages or gathering user input.
+
+    ```java
+    JDialog dialog = new JDialog(parentFrame, "Dialog Title", true);
+    dialog.setLayout(new BorderLayout());
+    dialog.add(new JLabel("Dialog content"), BorderLayout.CENTER);
+    
+    JButton okButton = new JButton("OK");
+    okButton.addActionListener(e -> dialog.dispose());
+    dialog.add(okButton, BorderLayout.SOUTH);
+    
+    dialog.pack();
+    dialog.setLocationRelativeTo(parentFrame);
+    dialog.setVisible(true);
+    ```
+  </Tab>
+  
+  <Tab title="JWindow">
+    ### javax.swing.JWindow
+
+    Window without borders, title bar, or window management buttons.
+
+    ```java
+    JWindow window = new JWindow();
+    window.setSize(300, 200);
+    window.setLocationRelativeTo(null);  // Center on screen
+    
+    JPanel panel = new JPanel();
+    panel.add(new JLabel("Borderless Window"));
+    window.setContentPane(panel);
+    
+    window.setVisible(true);
+    ```
+  </Tab>
+</Tabs>
+
+### Basic Components
+
+<Tabs>
+  <Tab title="JButton">
+    ### javax.swing.JButton
+
+    **From source (javax.swing.JButton:41-42):**
+    > An implementation of a "push" button.
+
+    **Class Signature:**
+    ```java
+    @JavaBean(defaultProperty = "UIClassID", 
+              description = "An implementation of a \"push\" button.")
+    public class JButton extends AbstractButton implements Accessible
+    ```
+
+    **Constructors:**
+    ```java
+    JButton()                    // No text or icon
+    JButton(String text)         // Text only
+    JButton(Icon icon)          // Icon only
+    JButton(String text, Icon icon)  // Both
+    JButton(Action a)           // From Action
+    ```
+
+    **Examples:**
+    ```java
+    // Simple button
+    JButton button = new JButton("Click Me");
+    button.addActionListener(e -> 
+        System.out.println("Button clicked!"));
+    
+    // Button with icon
+    ImageIcon icon = new ImageIcon("icon.png");
+    JButton iconButton = new JButton("Save", icon);
+    iconButton.setHorizontalTextPosition(SwingConstants.LEFT);
+    
+    // Button with Action
+    Action saveAction = new AbstractAction("Save") {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+            // Save logic
+        }
+    };
+    JButton actionButton = new JButton(saveAction);
+    
+    // Customized button
+    JButton customButton = new JButton("Custom");
+    customButton.setFont(new Font("Arial", Font.BOLD, 14));
+    customButton.setForeground(Color.WHITE);
+    customButton.setBackground(new Color(0, 120, 215));
+    customButton.setFocusPainted(false);
+    customButton.setBorderPainted(false);
+    ```
+  </Tab>
+  
+  <Tab title="JLabel">
+    ### javax.swing.JLabel
+
+    **From source (javax.swing.JLabel:62-64):**
+    > A display area for a short text string or an image, or both. A label does not react to input events.
+
+    ```java
+    // Text label
+    JLabel label = new JLabel("Username:");
+    label.setFont(new Font("Arial", Font.PLAIN, 14));
+    
+    // Label with icon
+    ImageIcon icon = new ImageIcon("user.png");
+    JLabel iconLabel = new JLabel("User", icon, SwingConstants.LEFT);
+    
+    // HTML formatted label
+    JLabel htmlLabel = new JLabel(
+        "<html><b>Bold</b> and <i>italic</i> text</html>"
+    );
+    
+    // Label for mnemonic
+    JLabel nameLabel = new JLabel("Name:");
+    JTextField nameField = new JTextField(20);
+    nameLabel.setLabelFor(nameField);
+    nameLabel.setDisplayedMnemonic('N');
+    ```
+  </Tab>
+  
+  <Tab title="JPanel">
+    ### javax.swing.JPanel
+
+    **From source (javax.swing.JPanel:42):**
+    > JPanel is a generic lightweight container.
+
+    **Class Signature:**
+    ```java
+    @JavaBean(defaultProperty = "UI", 
+              description = "A generic lightweight container.")
+    public class JPanel extends JComponent implements Accessible
+    ```
+
+    ```java
+    // Default FlowLayout
+    JPanel panel1 = new JPanel();
+    panel1.add(new JButton("Button 1"));
+    panel1.add(new JButton("Button 2"));
+    
+    // Custom layout
+    JPanel panel2 = new JPanel(new BorderLayout());
+    panel2.add(new JLabel("Header"), BorderLayout.NORTH);
+    panel2.add(new JTextArea(), BorderLayout.CENTER);
+    
+    // With border
+    JPanel panel3 = new JPanel();
+    panel3.setBorder(BorderFactory.createTitledBorder("Options"));
+    
+    // Double buffering control
+    JPanel panel4 = new JPanel(new GridLayout(2, 2), false);
+    ```
+  </Tab>
+</Tabs>
+
+### Text Components
+
+<Tabs>
+  <Tab title="JTextField">
+    ### javax.swing.JTextField
+
+    **From source (javax.swing.JTextField:59-60):**
+    > JTextField is a lightweight component that allows the editing of a single line of text.
+
+    ```java
+    // Basic text field
+    JTextField textField = new JTextField(20);  // 20 columns
+    
+    // With initial text
+    JTextField nameField = new JTextField("Enter name", 15);
+    
+    // Action listener (Enter key)
+    textField.addActionListener(e -> {
+        String text = textField.getText();
+        System.out.println("Entered: " + text);
+    });
+    
+    // Document listener (any change)
+    textField.getDocument().addDocumentListener(new DocumentListener() {
+        @Override
+        public void insertUpdate(DocumentEvent e) {
+            validateInput();
+        }
+        @Override
+        public void removeUpdate(DocumentEvent e) {
+            validateInput();
+        }
+        @Override
+        public void changedUpdate(DocumentEvent e) {
+            validateInput();
+        }
+    });
+    
+    // Validation
+    JTextField emailField = new JTextField(20);
+    emailField.setInputVerifier(new InputVerifier() {
+        @Override
+        public boolean verify(JComponent input) {
+            String text = ((JTextField) input).getText();
+            return text.matches("^[A-Za-z0-9+_.-]+@(.+)$");
+        }
+    });
+    ```
+  </Tab>
+  
+  <Tab title="JTextArea">
+    ### javax.swing.JTextArea
+
+    Multi-line text component.
+
+    ```java
+    // Basic text area
+    JTextArea textArea = new JTextArea(10, 40);  // rows, columns
+    textArea.setLineWrap(true);
+    textArea.setWrapStyleWord(true);
+    
+    // With scroll pane
+    JScrollPane scrollPane = new JScrollPane(textArea);
+    scrollPane.setVerticalScrollBarPolicy(
+        JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+    
+    // Append text
+    textArea.append("Line 1\n");
+    textArea.append("Line 2\n");
+    
+    // Read-only
+    textArea.setEditable(false);
+    textArea.setBackground(Color.LIGHT_GRAY);
+    ```
+  </Tab>
+  
+  <Tab title="JPasswordField">
+    ### javax.swing.JPasswordField
+
+    Secure text input that masks characters.
+
+    ```java
+    JPasswordField passwordField = new JPasswordField(20);
+    passwordField.setEchoChar('*');
+    
+    // Get password securely
+    char[] password = passwordField.getPassword();
+    try {
+        // Use password
+        String pwd = new String(password);
+        // Authenticate...
+    } finally {
+        // Clear password from memory
+        Arrays.fill(password, '\0');
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Selection Components
+
+```java
+// JCheckBox
+JCheckBox checkBox = new JCheckBox("Accept terms");
+checkBox.addItemListener(e -> {
+    if (e.getStateChange() == ItemEvent.SELECTED) {
+        System.out.println("Checked");
+    }
+});
+
+// JRadioButton with ButtonGroup
+JRadioButton option1 = new JRadioButton("Option 1", true);
+JRadioButton option2 = new JRadioButton("Option 2");
+JRadioButton option3 = new JRadioButton("Option 3");
+
+ButtonGroup group = new ButtonGroup();
+group.add(option1);
+group.add(option2);
+group.add(option3);
+
+// JComboBox
+String[] items = {"Item 1", "Item 2", "Item 3"};
+JComboBox<String> comboBox = new JComboBox<>(items);
+comboBox.addActionListener(e -> {
+    String selected = (String) comboBox.getSelectedItem();
+    System.out.println("Selected: " + selected);
+});
+
+// Editable combo box
+JComboBox<String> editableCombo = new JComboBox<>(items);
+editableCombo.setEditable(true);
+```
+
+### Complex Components
+
+<Tabs>
+  <Tab title="JTable">
+    ### javax.swing.JTable
+
+    Table component for displaying and editing tabular data.
+
+    ```java
+    // Data and column names
+    String[] columns = {"Name", "Age", "Email"};
+    Object[][] data = {
+        {"John Doe", 30, "john@example.com"},
+        {"Jane Smith", 25, "jane@example.com"},
+        {"Bob Johnson", 35, "bob@example.com"}
+    };
+    
+    // Create table
+    JTable table = new JTable(data, columns);
+    
+    // Table model for dynamic data
+    DefaultTableModel model = new DefaultTableModel(columns, 0);
+    JTable dynamicTable = new JTable(model);
+    model.addRow(new Object[]{"Alice", 28, "alice@example.com"});
+    
+    // Selection listener
+    table.getSelectionModel().addListSelectionListener(e -> {
+        if (!e.getValueIsAdjusting()) {
+            int row = table.getSelectedRow();
+            if (row >= 0) {
+                String name = (String) table.getValueAt(row, 0);
+                System.out.println("Selected: " + name);
+            }
+        }
+    });
+    
+    // With scroll pane
+    JScrollPane scrollPane = new JScrollPane(table);
+    table.setFillsViewportHeight(true);
+    ```
+  </Tab>
+  
+  <Tab title="JTree">
+    ### javax.swing.JTree
+
+    Hierarchical tree component.
+
+    ```java
+    // Create nodes
+    DefaultMutableTreeNode root = 
+        new DefaultMutableTreeNode("Root");
+    DefaultMutableTreeNode child1 = 
+        new DefaultMutableTreeNode("Child 1");
+    DefaultMutableTreeNode child2 = 
+        new DefaultMutableTreeNode("Child 2");
+    
+    root.add(child1);
+    root.add(child2);
+    child1.add(new DefaultMutableTreeNode("Grandchild"));
+    
+    // Create tree
+    JTree tree = new JTree(root);
+    
+    // Selection listener
+    tree.addTreeSelectionListener(e -> {
+        DefaultMutableTreeNode node = 
+            (DefaultMutableTreeNode) tree.getLastSelectedPathComponent();
+        if (node != null) {
+            System.out.println("Selected: " + node.getUserObject());
+        }
+    });
+    
+    // Expand all nodes
+    for (int i = 0; i < tree.getRowCount(); i++) {
+        tree.expandRow(i);
+    }
+    
+    JScrollPane scrollPane = new JScrollPane(tree);
+    ```
+  </Tab>
+  
+  <Tab title="JList">
+    ### javax.swing.JList
+
+    List component for selecting items.
+
+    ```java
+    // Simple list
+    String[] items = {"Apple", "Banana", "Cherry", "Date"};
+    JList<String> list = new JList<>(items);
+    
+    // List model for dynamic data
+    DefaultListModel<String> model = new DefaultListModel<>();
+    model.addElement("Item 1");
+    model.addElement("Item 2");
+    JList<String> dynamicList = new JList<>(model);
+    
+    // Selection mode
+    list.setSelectionMode(
+        ListSelectionModel.SINGLE_SELECTION);
+    
+    // Selection listener
+    list.addListSelectionListener(e -> {
+        if (!e.getValueIsAdjusting()) {
+            String selected = list.getSelectedValue();
+            System.out.println("Selected: " + selected);
+        }
+    });
+    
+    // Custom renderer
+    list.setCellRenderer(new DefaultListCellRenderer() {
+        @Override
+        public Component getListCellRendererComponent(
+                JList<?> list, Object value, int index,
+                boolean isSelected, boolean cellHasFocus) {
+            JLabel label = (JLabel) super.getListCellRendererComponent(
+                list, value, index, isSelected, cellHasFocus);
+            label.setIcon(new ImageIcon("icon.png"));
+            return label;
+        }
+    });
+    
+    JScrollPane scrollPane = new JScrollPane(list);
+    ```
+  </Tab>
+</Tabs>
+
+## Dialogs and Choosers
+
+### JOptionPane
+
+Convenience dialogs for common interactions:
+
+```java
+// Message dialog
+JOptionPane.showMessageDialog(frame, 
+    "Operation completed successfully!",
+    "Success",
+    JOptionPane.INFORMATION_MESSAGE);
+
+// Confirmation dialog
+int choice = JOptionPane.showConfirmDialog(frame,
+    "Are you sure you want to delete this file?",
+    "Confirm Delete",
+    JOptionPane.YES_NO_OPTION,
+    JOptionPane.WARNING_MESSAGE);
+
+if (choice == JOptionPane.YES_OPTION) {
+    // Delete file
+}
+
+// Input dialog
+String name = JOptionPane.showInputDialog(frame,
+    "Enter your name:",
+    "Name Input",
+    JOptionPane.QUESTION_MESSAGE);
+
+// Option dialog
+String[] options = {"Save", "Don't Save", "Cancel"};
+int result = JOptionPane.showOptionDialog(frame,
+    "Do you want to save changes?",
+    "Save Changes",
+    JOptionPane.DEFAULT_OPTION,
+    JOptionPane.QUESTION_MESSAGE,
+    null,
+    options,
+    options[0]);
+```
+
+### JFileChooser
+
+```java
+JFileChooser fileChooser = new JFileChooser();
+
+// Set directory
+fileChooser.setCurrentDirectory(new File(System.getProperty("user.home")));
+
+// File filters
+FileNameExtensionFilter filter = new FileNameExtensionFilter(
+    "Text Files", "txt", "text");
+fileChooser.setFileFilter(filter);
+
+// Open dialog
+int result = fileChooser.showOpenDialog(frame);
+if (result == JFileChooser.APPROVE_OPTION) {
+    File selectedFile = fileChooser.getSelectedFile();
+    System.out.println("Selected: " + selectedFile.getAbsolutePath());
+}
+
+// Save dialog
+int saveResult = fileChooser.showSaveDialog(frame);
+if (saveResult == JFileChooser.APPROVE_OPTION) {
+    File fileToSave = fileChooser.getSelectedFile();
+    // Save logic
+}
+```
+
+### JColorChooser
+
+```java
+// Simple color chooser
+Color selectedColor = JColorChooser.showDialog(frame,
+    "Choose a color",
+    Color.WHITE);
+
+if (selectedColor != null) {
+    panel.setBackground(selectedColor);
+}
+
+// Advanced color chooser dialog
+JColorChooser colorChooser = new JColorChooser(Color.WHITE);
+JDialog dialog = JColorChooser.createDialog(frame,
+    "Pick a Color",
+    true,  // modal
+    colorChooser,
+    e -> panel.setBackground(colorChooser.getColor()),  // OK action
+    null); // Cancel action
+dialog.setVisible(true);
+```
+
+## Layout and Borders
+
+### Borders
+
+```java
+import javax.swing.border.*;
+
+// Line border
+JPanel panel1 = new JPanel();
+panel1.setBorder(BorderFactory.createLineBorder(Color.BLACK, 2));
+
+// Titled border
+JPanel panel2 = new JPanel();
+panel2.setBorder(BorderFactory.createTitledBorder("Settings"));
+
+// Compound border
+Border outer = BorderFactory.createEmptyBorder(10, 10, 10, 10);
+Border inner = BorderFactory.createLineBorder(Color.GRAY);
+JPanel panel3 = new JPanel();
+panel3.setBorder(BorderFactory.createCompoundBorder(outer, inner));
+
+// Custom border combinations
+Border customBorder = BorderFactory.createCompoundBorder(
+    BorderFactory.createTitledBorder("Options"),
+    BorderFactory.createEmptyBorder(5, 5, 5, 5)
+);
+panel3.setBorder(customBorder);
+```
+
+## Threading and Event Dispatch
+
+<Warning>
+  **From source (javax.swing.JFrame:97-99):**
+  Swing is not thread safe. For more information see Swing's Threading Policy.
+</Warning>
+
+### SwingUtilities
+
+```java
+// Execute on EDT
+SwingUtilities.invokeLater(() -> {
+    // Update GUI components
+    label.setText("Updated text");
+});
+
+// Execute and wait
+try {
+    SwingUtilities.invokeAndWait(() -> {
+        // Update GUI
+    });
+} catch (Exception e) {
+    e.printStackTrace();
+}
+
+// Check if on EDT
+if (SwingUtilities.isEventDispatchThread()) {
+    // Already on EDT
+    updateGUI();
+} else {
+    SwingUtilities.invokeLater(this::updateGUI);
+}
+```
+
+### SwingWorker
+
+For background tasks:
+
+```java
+import javax.swing.*;
+import java.util.List;
+
+public class DataLoader extends SwingWorker<String, Integer> {
+    private JProgressBar progressBar;
+    private JLabel statusLabel;
+    
+    public DataLoader(JProgressBar progressBar, JLabel statusLabel) {
+        this.progressBar = progressBar;
+        this.statusLabel = statusLabel;
+    }
+    
+    @Override
+    protected String doInBackground() throws Exception {
+        // Background work
+        for (int i = 0; i <= 100; i++) {
+            Thread.sleep(50);  // Simulate work
+            setProgress(i);
+            publish(i);  // Send progress update
+        }
+        return "Data loaded successfully";
+    }
+    
+    @Override
+    protected void process(List<Integer> chunks) {
+        // Called on EDT with progress updates
+        int latest = chunks.get(chunks.size() - 1);
+        progressBar.setValue(latest);
+        statusLabel.setText("Loading... " + latest + "%");
+    }
+    
+    @Override
+    protected void done() {
+        // Called on EDT when complete
+        try {
+            String result = get();
+            statusLabel.setText(result);
+        } catch (Exception e) {
+            statusLabel.setText("Error: " + e.getMessage());
+        }
+    }
+}
+
+// Usage
+JProgressBar progressBar = new JProgressBar(0, 100);
+JLabel statusLabel = new JLabel("Ready");
+DataLoader loader = new DataLoader(progressBar, statusLabel);
+loader.execute();
+```
+
+## Complete Application Example
+
+```java
+import javax.swing.*;
+import javax.swing.border.*;
+import java.awt.*;
+import java.awt.event.*;
+import javax.swing.table.*;
+
+public class ContactManager extends JFrame {
+    private DefaultTableModel tableModel;
+    private JTable table;
+    private JTextField nameField, emailField, phoneField;
+    
+    public ContactManager() {
+        setTitle("Contact Manager");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new BorderLayout());
+        
+        // Create table
+        String[] columns = {"Name", "Email", "Phone"};
+        tableModel = new DefaultTableModel(columns, 0);
+        table = new JTable(tableModel);
+        JScrollPane scrollPane = new JScrollPane(table);
+        
+        // Input panel
+        JPanel inputPanel = new JPanel(new GridBagLayout());
+        inputPanel.setBorder(BorderFactory.createTitledBorder("Add Contact"));
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        
+        // Name field
+        gbc.gridx = 0; gbc.gridy = 0;
+        inputPanel.add(new JLabel("Name:"), gbc);
+        gbc.gridx = 1;
+        nameField = new JTextField(20);
+        inputPanel.add(nameField, gbc);
+        
+        // Email field
+        gbc.gridx = 0; gbc.gridy = 1;
+        inputPanel.add(new JLabel("Email:"), gbc);
+        gbc.gridx = 1;
+        emailField = new JTextField(20);
+        inputPanel.add(emailField, gbc);
+        
+        // Phone field
+        gbc.gridx = 0; gbc.gridy = 2;
+        inputPanel.add(new JLabel("Phone:"), gbc);
+        gbc.gridx = 1;
+        phoneField = new JTextField(20);
+        inputPanel.add(phoneField, gbc);
+        
+        // Buttons
+        JPanel buttonPanel = new JPanel(new FlowLayout());
+        JButton addButton = new JButton("Add Contact");
+        JButton deleteButton = new JButton("Delete Selected");
+        JButton clearButton = new JButton("Clear All");
+        
+        addButton.addActionListener(e -> addContact());
+        deleteButton.addActionListener(e -> deleteContact());
+        clearButton.addActionListener(e -> clearAll());
+        
+        buttonPanel.add(addButton);
+        buttonPanel.add(deleteButton);
+        buttonPanel.add(clearButton);
+        
+        // Add to frame
+        add(inputPanel, BorderLayout.NORTH);
+        add(scrollPane, BorderLayout.CENTER);
+        add(buttonPanel, BorderLayout.SOUTH);
+        
+        setSize(600, 400);
+        setLocationRelativeTo(null);
+    }
+    
+    private void addContact() {
+        String name = nameField.getText().trim();
+        String email = emailField.getText().trim();
+        String phone = phoneField.getText().trim();
+        
+        if (name.isEmpty() || email.isEmpty() || phone.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "Please fill all fields",
+                "Validation Error",
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        tableModel.addRow(new Object[]{name, email, phone});
+        
+        // Clear fields
+        nameField.setText("");
+        emailField.setText("");
+        phoneField.setText("");
+        nameField.requestFocus();
+    }
+    
+    private void deleteContact() {
+        int selectedRow = table.getSelectedRow();
+        if (selectedRow >= 0) {
+            int confirm = JOptionPane.showConfirmDialog(this,
+                "Delete selected contact?",
+                "Confirm Delete",
+                JOptionPane.YES_NO_OPTION);
+            
+            if (confirm == JOptionPane.YES_OPTION) {
+                tableModel.removeRow(selectedRow);
+            }
+        } else {
+            JOptionPane.showMessageDialog(this,
+                "Please select a contact to delete",
+                "No Selection",
+                JOptionPane.WARNING_MESSAGE);
+        }
+    }
+    
+    private void clearAll() {
+        if (tableModel.getRowCount() > 0) {
+            int confirm = JOptionPane.showConfirmDialog(this,
+                "Delete all contacts?",
+                "Confirm Clear",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+            
+            if (confirm == JOptionPane.YES_OPTION) {
+                tableModel.setRowCount(0);
+            }
+        }
+    }
+    
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            new ContactManager().setVisible(true);
+        });
+    }
+}
+```
+
+## Look and Feel
+
+```java
+// Set system look and feel
+try {
+    UIManager.setLookAndFeel(
+        UIManager.getSystemLookAndFeelClassName());
+} catch (Exception e) {
+    e.printStackTrace();
+}
+
+// Set cross-platform (Metal)
+UIManager.setLookAndFeel(
+    UIManager.getCrossPlatformLookAndFeelClassName());
+
+// Set Nimbus
+for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
+    if ("Nimbus".equals(info.getName())) {
+        UIManager.setLookAndFeel(info.getClassName());
+        break;
+    }
+}
+
+// Update existing windows
+SwingUtilities.updateComponentTreeUI(frame);
+```
+
+## See Also
+
+- [AWT API Reference](/api/awt) - Foundation for Swing components
+- [java.desktop Module](/api/java-desktop) - Complete desktop API module
+- [Swing Tutorial](https://docs.oracle.com/javase/tutorial/uiswing/)

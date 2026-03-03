@@ -1,0 +1,337 @@
+---
+title: HotSpot JVM Runtime Overview
+description: Comprehensive guide to the HotSpot Virtual Machine runtime architecture, including execution engine, memory management, and core subsystems
+---
+
+The HotSpot VM is Oracle's high-performance Java Virtual Machine implementation, combining an interpreter with adaptive JIT compilation to provide optimal runtime performance.
+
+## Architecture Overview
+
+HotSpot is structured around several key subsystems that work together to execute Java bytecode efficiently:
+
+### Runtime Components
+
+The runtime system manages the fundamental execution environment:
+
+<Tabs>
+  <Tab title="Thread Management">
+    The thread hierarchy in HotSpot (defined in `src/hotspot/share/runtime/thread.hpp:71-87`):
+
+    ```cpp
+    // Class hierarchy
+    // - Thread
+    //   - JavaThread
+    //     - various subclasses eg CompilerThread, ServiceThread
+    //   - NonJavaThread
+    //     - NamedThread
+    //       - VMThread
+    //       - ConcurrentGCThread
+    //       - WorkerThread
+    //     - WatcherThread
+    //     - JfrThreadSampler
+    ```
+
+    All Thread subclasses must be either JavaThread or NonJavaThread. The execution sequence includes:
+    - `thread_native_entry` - per-OS native entry point
+    - Stack initialization
+    - OS-level initialization (signal masks, etc.)
+    - Handshake with creating thread
+    - `this->call_run()` - common shared entry point
+    - `this->pre_run()` - virtual per-thread-type initialization
+    - `this->run()` - virtual per-thread-type main logic
+  </Tab>
+
+  <Tab title="Class Loading">
+    The class loading system is managed through:
+
+    - **SystemDictionary**: Manages loaded classes and resolves class references
+    - **ClassLoader**: Handles class file loading and verification
+    - **Klass hierarchy**: Internal representation of Java classes
+
+    From `src/hotspot/share/oops/klass.hpp:62`, a Klass provides:
+    1. Language level class object (method dictionary, etc.)
+    2. VM dispatch behavior for the object
+
+    <Note>
+    The oop/klass dichotomy exists because we don't want a C++ vtbl pointer in every object. Normal oops don't have virtual functions; instead, they forward all virtual functions to their klass.
+    </Note>
+  </Tab>
+
+  <Tab title="Interpreter">
+    The bytecode interpreter executes Java bytecode directly:
+
+    - **Template Interpreter**: Platform-specific optimized interpreter using code templates
+    - **Bytecode dispatching**: Fast bytecode execution via jump tables
+    - **Stack frame management**: Handles local variables, operand stack, and method invocation
+
+    Key bytecode categories from `src/hotspot/share/interpreter/bytecodes.hpp:39-100`:
+    - Constants: `aconst_null`, `iconst_0-5`, `lconst_0-1`
+    - Loads: `iload`, `lload`, `fload`, `dload`, `aload`
+    - Array operations: `iaload`, `laload`, `aaload`
+    - Arithmetic: Stack-based operations on primitives
+  </Tab>
+</Tabs>
+
+### Memory Management
+
+The Universe class (`src/hotspot/share/memory/universe.hpp:48`) is a namespace holding known system classes and objects in the VM:
+
+<ResponseField name="_typeArrayKlasses" type="TypeArrayKlass*[]">
+  Array of klasses for primitive array types (boolean[], byte[], int[], etc.)
+</ResponseField>
+
+<ResponseField name="_objectArrayKlass" type="ObjArrayKlass*">
+  Klass for object arrays
+</ResponseField>
+
+<ResponseField name="_main_thread_group" type="OopHandle">
+  Reference to the main thread group object
+</ResponseField>
+
+<ResponseField name="_system_thread_group" type="OopHandle">
+  Reference to the system thread group object
+</ResponseField>
+
+<ResponseField name="_out_of_memory_errors" type="OopHandle">
+  Preallocated error objects (no backtrace) for OOM situations
+</ResponseField>
+
+The object heap is allocated and accessed through Universe, with allocation by the interpreter and compiled code done inline and bailing out to scavenge operations when necessary.
+
+## Garbage Collection
+
+HotSpot provides multiple garbage collector implementations in `src/hotspot/share/gc/`:
+
+### Available GC Implementations
+
+<Tabs>
+  <Tab title="Serial GC">
+    Single-threaded stop-the-world collector suitable for small applications.
+    
+    - **Young generation**: Copy collector
+    - **Old generation**: Mark-sweep-compact
+    - **Best for**: Single-processor machines or small heaps
+  </Tab>
+
+  <Tab title="Parallel GC">
+    Multi-threaded throughput collector optimized for high throughput.
+    
+    - **Young generation**: Parallel copy collector
+    - **Old generation**: Parallel mark-compact
+    - **Best for**: Batch processing, maximum throughput requirements
+  </Tab>
+
+  <Tab title="G1 GC">
+    Garbage-First collector designed for large heaps with predictable pause times.
+    
+    - **Region-based**: Heap divided into fixed-size regions
+    - **Concurrent marking**: Reduces pause times
+    - **Compaction**: Incremental compaction of live objects
+    - **Best for**: Large heaps (>4GB) with pause time goals
+  </Tab>
+
+  <Tab title="Z GC">
+    Scalable low-latency garbage collector.
+    
+    - **Concurrent**: Nearly all GC work done concurrently
+    - **Region-based**: Uses colored pointers for metadata
+    - **Pause times**: Sub-millisecond pauses
+    - **Best for**: Large heaps requiring very low latency
+  </Tab>
+
+  <Tab title="Shenandoah">
+    Low-pause time garbage collector.
+    
+    - **Concurrent evacuation**: Moves objects concurrently with application
+    - **Brooks pointers**: Indirection for concurrent relocation
+    - **Best for**: Applications requiring consistent low pause times
+  </Tab>
+
+  <Tab title="Epsilon">
+    No-op garbage collector that handles allocation but performs no reclamation.
+    
+    - **No GC**: Allocation-only, no memory reclamation
+    - **Best for**: Performance testing, very short-lived jobs, memory-only workloads
+  </Tab>
+</Tabs>
+
+## JIT Compilation
+
+HotSpot uses adaptive compilation with multiple tiers:
+
+### Compilation Tiers
+
+<ResponseField name="Tier 0" type="Interpreter">
+  Initial execution mode, collects profiling data
+</ResponseField>
+
+<ResponseField name="Tier 1" type="C1 Simple">
+  Client compiler with minimal optimizations
+</ResponseField>
+
+<ResponseField name="Tier 2" type="C1 Limited Profile">
+  C1 with limited profiling overhead
+</ResponseField>
+
+<ResponseField name="Tier 3" type="C1 Full Profile">
+  C1 with full profiling for C2
+</ResponseField>
+
+<ResponseField name="Tier 4" type="C2">
+  Server compiler with aggressive optimizations
+</ResponseField>
+
+### Compiler Architecture
+
+From `src/hotspot/share/compiler/compileBroker.hpp:94-100`:
+
+```cpp
+class CompileQueue : public CHeapObj<mtCompiler> {
+ private:
+  const char* _name;
+  // Compilation tasks are queued for execution
+};
+```
+
+The CompileBroker manages compilation requests:
+- Queues compilation tasks based on method hotness
+- Manages compiler threads (C1 and C2)
+- Handles compilation lifecycle and inlining decisions
+
+<Warning>
+The C2 compiler (`src/hotspot/share/opto/`) is a sophisticated optimizing compiler with:
+- Sea-of-nodes IR representation
+- Global value numbering
+- Escape analysis
+- Loop optimizations
+- Intrinsics for performance-critical operations
+</Warning>
+
+## VM Globals and Configuration
+
+VM behavior is controlled through flags defined in `src/hotspot/share/runtime/globals.hpp:37-99`:
+
+### Flag Categories
+
+<ResponseField name="product" type="flag category">
+  Always settable and visible in production builds
+</ResponseField>
+
+<ResponseField name="develop" type="flag category">
+  Settable only during development, constant in PRODUCT builds
+</ResponseField>
+
+<ResponseField name="DIAGNOSTIC" type="flag attribute">
+  For VM quality assurance or field diagnosis. Requires `-XX:+UnlockDiagnosticVMOptions`
+</ResponseField>
+
+<ResponseField name="EXPERIMENTAL" type="flag attribute">
+  For experimental features. Requires `-XX:+UnlockExperimentalVMOptions`
+</ResponseField>
+
+<ResponseField name="MANAGEABLE" type="flag attribute">
+  Dynamically writeable through JMX (HotSpotDiagnosticMXBean API)
+</ResponseField>
+
+## Object Representation
+
+### Klass Kinds
+
+From `src/hotspot/share/oops/klass.hpp:68-77`:
+
+```cpp
+enum KlassKind : u2 {
+  InstanceKlassKind,
+  InstanceRefKlassKind,
+  InstanceMirrorKlassKind,
+  InstanceClassLoaderKlassKind,
+  InstanceStackChunkKlassKind,
+  TypeArrayKlassKind,
+  ObjArrayKlassKind,
+  UnknownKlassKind
+};
+```
+
+Each klass kind represents a specific type of Java object:
+
+- **InstanceKlassKind**: Regular Java class instances
+- **InstanceRefKlassKind**: Reference objects (WeakReference, etc.)
+- **InstanceMirrorKlassKind**: java.lang.Class instances
+- **TypeArrayKlassKind**: Primitive arrays
+- **ObjArrayKlassKind**: Object arrays
+
+### Layout Helper
+
+The layout helper is a combined descriptor of object layout:
+- For instances: positive number representing instance size
+- For arrays: negative number with encoded metadata (tag, header size, element type, log2 of element size)
+
+## JVM Interface Functions
+
+Core JVM functions from `src/hotspot/share/include/jvm.h:66-150`:
+
+### Object Operations
+
+```c
+JNIEXPORT jint JNICALL
+JVM_IHashCode(JNIEnv *env, jobject obj);
+
+JNIEXPORT void JNICALL
+JVM_MonitorWait(JNIEnv *env, jobject obj, jlong ms);
+
+JNIEXPORT void JNICALL
+JVM_MonitorNotify(JNIEnv *env, jobject obj);
+
+JNIEXPORT jobject JNICALL
+JVM_Clone(JNIEnv *env, jobject obj);
+```
+
+### System Operations
+
+```c
+JNIEXPORT jlong JNICALL
+JVM_CurrentTimeMillis(JNIEnv *env, jclass ignored);
+
+JNIEXPORT jlong JNICALL
+JVM_NanoTime(JNIEnv *env, jclass ignored);
+
+JNIEXPORT void JNICALL
+JVM_ArrayCopy(JNIEnv *env, jclass ignored, jobject src, jint src_pos,
+              jobject dst, jint dst_pos, jint length);
+```
+
+### Memory Management
+
+```c
+JNIEXPORT void JNICALL
+JVM_GC(void);
+
+JNIEXPORT jlong JNICALL
+JVM_TotalMemory(void);
+
+JNIEXPORT jlong JNICALL
+JVM_FreeMemory(void);
+
+JNIEXPORT jlong JNICALL
+JVM_MaxMemory(void);
+```
+
+<Note>
+These JVM_ functions complement the standard JNI support and are used by native libraries in the standard Java API. For example, java.lang.Object uses VM-level functions for monitor wait and notify operations.
+</Note>
+
+## Thread-Local Allocation Buffers (TLABs)
+
+HotSpot uses TLABs for fast, thread-local allocation:
+- Each thread has a private allocation buffer in Eden
+- Most allocations are satisfied with a simple pointer bump
+- Reduces allocation contention between threads
+- Falls back to slow-path allocation when TLAB is full
+
+## Safepoints
+
+Safepoints are synchronization points where all Java threads are stopped:
+- Required for operations like GC, deoptimization, biased locking revocation
+- Thread-local polling mechanism for safepoint checks
+- Managed by SafepointMechanism and SafepointSynchronize
+- Threads must reach a safepoint to ensure a consistent heap state
