@@ -1,0 +1,137 @@
+{
+  "projectType": "general",
+  "projectName": "OpenJDK",
+  "projectDescription": "The open-source reference implementation of the Java Platform, Standard Edition",
+  "theme": "aspen",
+  "primaryColor": "#F89820",
+  "lightColor": "#FFA940",
+  "darkColor": "#E68200",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Building the JDK",
+            "pages": [
+              "building/overview",
+              "building/requirements",
+              "building/configuration",
+              "building/compilation",
+              "building/troubleshooting"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/hotspot-vm",
+              "architecture/garbage-collection",
+              "architecture/jit-compiler",
+              "architecture/module-system"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/contributing",
+              "development/code-style",
+              "development/testing",
+              "development/debugging"
+            ]
+          },
+          {
+            "group": "Tools & Utilities",
+            "pages": [
+              "tools/overview",
+              "tools/javac",
+              "tools/jlink",
+              "tools/jpackage",
+              "tools/jcmd"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core APIs",
+            "pages": [
+              "api/java-base",
+              "api/java-lang",
+              "api/java-util",
+              "api/java-io"
+            ]
+          },
+          {
+            "group": "Desktop APIs",
+            "pages": [
+              "api/java-desktop",
+              "api/awt",
+              "api/swing"
+            ]
+          },
+          {
+            "group": "Network & Communication",
+            "pages": [
+              "api/java-net",
+              "api/java-nio",
+              "api/java-rmi"
+            ]
+          },
+          {
+            "group": "Security & Crypto",
+            "pages": [
+              "api/java-security",
+              "api/java-crypto",
+              "api/jgss"
+            ]
+          },
+          {
+            "group": "JVM Internals",
+            "pages": [
+              "api/hotspot-overview",
+              "api/jvmti",
+              "api/jni"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "HotSpot JVM with advanced JIT compilation",
+    "Comprehensive Java Standard Library",
+    "Multiple garbage collectors (G1, ZGC, Shenandoah)",
+    "Java Module System (Project Jigsaw)",
+    "Native compilation with GraalVM",
+    "Cross-platform support (Linux, Windows, macOS)",
+    "Production-ready development tools",
+    "Extensive performance optimizations"
+  ],
+  "publicApiSurface": [
+    "java.lang.Object",
+    "java.lang.String",
+    "java.util.List",
+    "java.util.Map",
+    "java.io.InputStream",
+    "java.nio.file.Files",
+    "java.util.stream.Stream",
+    "java.util.concurrent.CompletableFuture",
+    "javax.swing.JFrame",
+    "java.net.http.HttpClient",
+    "java.sql.Connection",
+    "java.security.MessageDigest",
+    "HotSpot JVM Runtime",
+    "Java Native Interface (JNI)",
+    "JVM Tool Interface (JVMTI)"
+  ]
+}
